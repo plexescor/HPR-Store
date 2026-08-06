@@ -8,8 +8,9 @@ class GUI
         ~GUI();
 
     public:
-        void run();
+        void show();
+        void hide();
 
     private:
-        slint::ComponentHandle<MainWindow> ui;
+        slint::ComponentHandle<StoreWindow> ui;
 };
