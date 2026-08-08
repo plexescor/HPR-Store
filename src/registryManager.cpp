@@ -14,6 +14,9 @@ std::string RegistryManager::fetchRegistry()
     std::string fullUrl = "https://" + std::string(REGISTRY_URL) + std::string(REGISTRY_PATH);
 
     auto args = httpClient.createRequest();
+    args->extraHeaders["User-Agent"] = "HPR";
+    args->extraHeaders["Accept"] = "application/vnd.github.v3.raw";
+
     auto response = httpClient.get(fullUrl, args);
 
     if (response->statusCode == 200)

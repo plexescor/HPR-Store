@@ -14,7 +14,7 @@ class RegistryManager
 
     private:
         static constexpr std::string_view REGISTRY_URL = 
-            "raw.githubusercontent.com";
+            "api.github.com";
         static constexpr std::string_view REGISTRY_PATH = 
-            "/plexescor/HPR-Store/main/registry.json";
+            "/repos/plexescor/HPR-Store/contents/registry.json";
 };
