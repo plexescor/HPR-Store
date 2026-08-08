@@ -15,6 +15,7 @@ struct StoreItem {
     std::string author;
     std::string authorGithub;
     std::string description;
+    std::string longDescription;
     std::string version;
     std::string downloadUrl;
     std::string sourceUrl;

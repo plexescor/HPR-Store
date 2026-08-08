@@ -10,6 +10,8 @@ class UIEventBridge
         ~UIEventBridge();
 
         void setupEvents();
+        void updateStoreItemsUI();
+        void triggerRefresh();
 
     private:
         slint::ComponentHandle<StoreWindow> ui;

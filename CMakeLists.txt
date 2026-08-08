@@ -29,10 +29,17 @@ FetchContent_Declare(
     GIT_TAG        v12.0.1 # Use the latest stable tag
 )
 
+FetchContent_Declare(
+    nlohmann_json
+    URL https://github.com/nlohmann/json/releases/download/v3.11.3/json.tar.xz
+    DOWNLOAD_EXTRACT_TIMESTAMP TRUE
+)
+
 # 2. Tell IXWebSocket to use native OS TLS (Schannel on Win / SecureTransport on Mac)
 set(USE_TLS ON CACHE BOOL "" FORCE)
 
-FetchContent_MakeAvailable(ixwebsocket)
+FetchContent_MakeAvailable(ixwebsocket nlohmann_json)
+
 
 file(GLOB_RECURSE SOURCES "src/*.cpp")
 
@@ -72,6 +79,7 @@ target_include_directories(HPR-Store PRIVATE external/sol2/)
 
 target_link_libraries(HPR-Store PRIVATE
     lua_static
+    nlohmann_json::nlohmann_json
 )
 
 target_include_directories(HPR-Store

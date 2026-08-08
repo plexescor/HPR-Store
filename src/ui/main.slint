@@ -1,4 +1,8 @@
 import { Palette } from "./palette.slint";
+import { StoreItem_S } from "./types.slint";
+import { Card } from "./card.slint";
+
+export { StoreItem_S }
 
 component RefreshButton inherits Rectangle {
     in property <string> label: "REFRESH";
@@ -39,14 +43,93 @@ component RefreshButton inherits Rectangle {
     }
 }
 
+component InstallButton inherits Rectangle {
+    in property <string> label: "INSTALL";
+    callback clicked;
+
+    width: 96px * Palette.scale;
+    height: 30px * Palette.scale;
+    border-radius: 6px * Palette.scale;
+    border-width: 1px * Palette.scale;
+
+    animate background { duration: 100ms; }
+    animate border-color { duration: 100ms; }
+
+    ta-install := TouchArea {
+        mouse-cursor: pointer;
+        clicked => { root.clicked(); }
+    }
+
+    states [
+        pressed when ta-install.pressed: {
+            background: #38bdf835;
+            border-color: #38bdf880;
+        }
+        hovered when ta-install.has-hover: {
+            background: #38bdf825;
+            border-color: #38bdf860;
+        }
+        normal when !ta-install.has-hover: {
+            background: #38bdf812;
+            border-color: #38bdf835;
+        }
+    ]
+
+    Text {
+        text: root.label;
+        font-size: 9.5px * Palette.scale;
+        font-weight: 700;
+        letter-spacing: 1.5px * Palette.scale;
+        color: ta-install.pressed ? #e0f2fe : (ta-install.has-hover ? #bae6fd : #38bdf8);
+        horizontal-alignment: center;
+        vertical-alignment: center;
+        animate color { duration: 100ms; }
+    }
+}
+
+component BackButton inherits Rectangle {
+    in property <string> label: "← BACK TO STORE";
+    callback clicked;
+
+    width: button-label.preferred-width + 20px * Palette.scale;
+    height: 30px * Palette.scale;
+    border-radius: 6px * Palette.scale;
+    border-width: 1px * Palette.scale;
+    border-color: Palette.card-border;
+    background: ta-back.pressed ? Palette.input-bg-press : (ta-back.has-hover ? Palette.input-bg-hover : Palette.input-bg);
+
+    animate background { duration: 100ms; }
+
+    button-label := Text {
+        text: root.label;
+        color: Palette.text-secondary;
+        font-size: 10px * Palette.scale;
+        font-weight: 700;
+        letter-spacing: 1px * Palette.scale;
+        horizontal-alignment: center;
+        vertical-alignment: center;
+    }
+
+    ta-back := TouchArea {
+        mouse-cursor: pointer;
+        clicked => { root.clicked(); }
+    }
+}
+
 export component StoreWindow inherits Window {
     title: "HPR Store";
+    no-frame: false;
     background: Palette.background;
     default-font-size: 13px * Palette.scale;
     preferred-width: 780px * Palette.scale;
     preferred-height: 626px * Palette.scale;
 
+    in property <[StoreItem_S]> storeItems;
+    property <bool> showDetailView: false;
+    property <StoreItem_S> selectedItem;
+
     callback refresh-clicked();
+    callback install-item-clicked(string);
 
     Rectangle {
         width: 100%;
@@ -101,9 +184,383 @@ export component StoreWindow inherits Window {
                 }
             }
 
-            // ── Main View Area ──────────────────────────────────────────
+            // ── Main Content Container ──────────────────────────────────
             main-view := Rectangle {
                 vertical-stretch: 1;
+
+                // ── LIST VIEW ───────────────────────────────────────────
+                if !showDetailView : Flickable {
+                    viewport-height: storeContainer.preferred-height;
+                    interactive: true;
+
+                    storeContainer := VerticalLayout {
+                        width: 100%;
+                        padding: 16px * Palette.scale;
+                        spacing: 12px * Palette.scale;
+
+                        if storeItems.length == 0 : Card {
+                            height: 80px * Palette.scale;
+                            HorizontalLayout {
+                                alignment: center;
+                                Text {
+                                    text: "NO STORE ITEMS AVAILABLE";
+                                    font-size: 10px * Palette.scale;
+                                    font-weight: 700;
+                                    letter-spacing: 2.5px * Palette.scale;
+                                    color: Palette.text-muted;
+                                    vertical-alignment: center;
+                                }
+                            }
+                        }
+
+                        for item in storeItems : Card {
+                            cardTouch := TouchArea {
+                                mouse-cursor: pointer;
+                                clicked => {
+                                    root.selectedItem = item;
+                                    root.showDetailView = true;
+                                }
+                            }
+
+                            VerticalLayout {
+                                padding: 14px * Palette.scale;
+                                spacing: 10px * Palette.scale;
+
+                                // Header row (Name, Version, Type badge, Author)
+                                HorizontalLayout {
+                                    alignment: space-between;
+
+                                    HorizontalLayout {
+                                        spacing: 10px * Palette.scale;
+
+                                        Text {
+                                            text: item.name;
+                                            font-size: 14.5px * Palette.scale;
+                                            font-weight: 700;
+                                            color: Palette.text-primary;
+                                            vertical-alignment: center;
+                                        }
+
+                                        Rectangle {
+                                            background: #38bdf815;
+                                            border-width: 1px * Palette.scale;
+                                            border-color: #38bdf840;
+                                            border-radius: 4px * Palette.scale;
+                                            height: 18px * Palette.scale;
+                                            width: versionTxt.preferred-width + 10px * Palette.scale;
+                                            y: (parent.height - self.height) / 2;
+
+                                            versionTxt := Text {
+                                                text: "v" + item.version;
+                                                font-size: 9.5px * Palette.scale;
+                                                font-weight: 700;
+                                                color: #38bdf8;
+                                                horizontal-alignment: center;
+                                                vertical-alignment: center;
+                                            }
+                                        }
+
+                                        Rectangle {
+                                            background: item.item-type == "EXTENSION" ? #c084fc15 : #a3e63515;
+                                            border-width: 1px * Palette.scale;
+                                            border-color: item.item-type == "EXTENSION" ? #c084fc40 : #a3e63540;
+                                            border-radius: 4px * Palette.scale;
+                                            height: 18px * Palette.scale;
+                                            width: typeTxt.preferred-width + 10px * Palette.scale;
+                                            y: (parent.height - self.height) / 2;
+
+                                            typeTxt := Text {
+                                                text: item.item-type;
+                                                font-size: 9px * Palette.scale;
+                                                font-weight: 700;
+                                                letter-spacing: 1px * Palette.scale;
+                                                color: item.item-type == "EXTENSION" ? #c084fc : #a3e635;
+                                                horizontal-alignment: center;
+                                                vertical-alignment: center;
+                                            }
+                                        }
+                                    }
+
+                                    Text {
+                                        text: "by " + item.author;
+                                        font-size: 11px * Palette.scale;
+                                        font-weight: 500;
+                                        color: Palette.text-secondary;
+                                        vertical-alignment: center;
+                                    }
+                                }
+
+                                // Short Description (non-markdown)
+                                Text {
+                                    text: item.description;
+                                    font-size: 11.5px * Palette.scale;
+                                    font-weight: 500;
+                                    color: Palette.text-secondary;
+                                    wrap: word-wrap;
+                                }
+
+                                // Footer row (Stats & Install Button)
+                                HorizontalLayout {
+                                    alignment: space-between;
+
+                                    HorizontalLayout {
+                                        spacing: 16px * Palette.scale;
+
+                                        Text {
+                                            text: "★ " + item.star-count;
+                                            font-size: 10.5px * Palette.scale;
+                                            color: #facc15;
+                                            vertical-alignment: center;
+                                        }
+
+                                        Text {
+                                            text: "↓ " + item.download-count;
+                                            font-size: 10.5px * Palette.scale;
+                                            color: Palette.text-muted;
+                                            vertical-alignment: center;
+                                        }
+
+                                        Text {
+                                            text: "Updated: " + item.last-updated;
+                                            font-size: 10px * Palette.scale;
+                                            color: Palette.text-dim;
+                                            vertical-alignment: center;
+                                        }
+                                    }
+
+                                    InstallButton {
+                                        label: "INSTALL";
+                                        clicked => { root.install-item-clicked(item.id); }
+                                    }
+                                }
+                            }
+                        }
+                    }
+                }
+
+                // ── EXPANDED / MAXIMISED DETAIL VIEW ────────────────────
+                if showDetailView : Flickable {
+                    viewport-height: detailContainer.preferred-height;
+                    interactive: true;
+
+                    detailContainer := VerticalLayout {
+                        width: 100%;
+                        padding: 16px * Palette.scale;
+                        spacing: 14px * Palette.scale;
+
+                        Card {
+                            VerticalLayout {
+                                padding: 18px * Palette.scale;
+                                spacing: 16px * Palette.scale;
+
+                                // Action Bar (Back & Install)
+                                HorizontalLayout {
+                                    alignment: space-between;
+
+                                    BackButton {
+                                        clicked => { root.showDetailView = false; }
+                                    }
+
+                                    InstallButton {
+                                        label: "INSTALL";
+                                        clicked => { root.install-item-clicked(selectedItem.id); }
+                                    }
+                                }
+
+                                Rectangle {
+                                    height: 1px * Palette.scale;
+                                    background: Palette.divider;
+                                }
+
+                                // Title & Author Section
+                                VerticalLayout {
+                                    spacing: 8px * Palette.scale;
+
+                                    HorizontalLayout {
+                                        spacing: 12px * Palette.scale;
+
+                                        Text {
+                                            text: selectedItem.name;
+                                            font-size: 20px * Palette.scale;
+                                            font-weight: 800;
+                                            color: Palette.text-primary;
+                                            vertical-alignment: center;
+                                        }
+
+                                        Rectangle {
+                                            background: #38bdf815;
+                                            border-width: 1px * Palette.scale;
+                                            border-color: #38bdf840;
+                                            border-radius: 4px * Palette.scale;
+                                            height: 20px * Palette.scale;
+                                            width: dVersionTxt.preferred-width + 12px * Palette.scale;
+                                            y: (parent.height - self.height) / 2;
+
+                                            dVersionTxt := Text {
+                                                text: "v" + selectedItem.version;
+                                                font-size: 10px * Palette.scale;
+                                                font-weight: 700;
+                                                color: #38bdf8;
+                                                horizontal-alignment: center;
+                                                vertical-alignment: center;
+                                            }
+                                        }
+
+                                        Rectangle {
+                                            background: selectedItem.item-type == "EXTENSION" ? #c084fc15 : #a3e63515;
+                                            border-width: 1px * Palette.scale;
+                                            border-color: selectedItem.item-type == "EXTENSION" ? #c084fc40 : #a3e63540;
+                                            border-radius: 4px * Palette.scale;
+                                            height: 20px * Palette.scale;
+                                            width: dTypeTxt.preferred-width + 12px * Palette.scale;
+                                            y: (parent.height - self.height) / 2;
+
+                                            dTypeTxt := Text {
+                                                text: selectedItem.item-type;
+                                                font-size: 9.5px * Palette.scale;
+                                                font-weight: 700;
+                                                letter-spacing: 1px * Palette.scale;
+                                                color: selectedItem.item-type == "EXTENSION" ? #c084fc : #a3e635;
+                                                horizontal-alignment: center;
+                                                vertical-alignment: center;
+                                            }
+                                        }
+                                    }
+
+                                    HorizontalLayout {
+                                        spacing: 12px * Palette.scale;
+
+                                        Text {
+                                            text: "Author: " + selectedItem.author;
+                                            font-size: 12px * Palette.scale;
+                                            font-weight: 600;
+                                            color: Palette.text-secondary;
+                                        }
+
+                                        if selectedItem.author-github != "" : Text {
+                                            text: "(" + selectedItem.author-github + ")";
+                                            font-size: 11px * Palette.scale;
+                                            color: #38bdf8;
+                                        }
+                                    }
+                                }
+
+                                // Key Stats Row
+                                Card {
+                                    background: Palette.input-bg;
+                                    border-color: Palette.input-border;
+
+                                    HorizontalLayout {
+                                        padding: 12px * Palette.scale;
+                                        spacing: 24px * Palette.scale;
+                                        alignment: space-around;
+
+                                        Text {
+                                            text: "★ Stars: " + selectedItem.star-count;
+                                            font-size: 11.5px * Palette.scale;
+                                            font-weight: 700;
+                                            color: #facc15;
+                                        }
+
+                                        Text {
+                                            text: "↓ Downloads: " + selectedItem.download-count;
+                                            font-size: 11.5px * Palette.scale;
+                                            font-weight: 700;
+                                            color: Palette.text-primary;
+                                        }
+
+                                        Text {
+                                            text: "Last Updated: " + selectedItem.last-updated;
+                                            font-size: 11px * Palette.scale;
+                                            color: Palette.text-secondary;
+                                        }
+                                    }
+                                }
+
+                                // Short Summary
+                                VerticalLayout {
+                                    spacing: 4px * Palette.scale;
+
+                                    Text {
+                                        text: "OVERVIEW";
+                                        font-size: 9px * Palette.scale;
+                                        font-weight: 800;
+                                        letter-spacing: 2px * Palette.scale;
+                                        color: Palette.text-muted;
+                                    }
+
+                                    Text {
+                                        text: selectedItem.description;
+                                        font-size: 12.5px * Palette.scale;
+                                        font-weight: 500;
+                                        color: Palette.text-primary;
+                                        wrap: word-wrap;
+                                    }
+                                }
+
+                                // Detailed Documentation (Long Description)
+                                if selectedItem.long-description != "" : VerticalLayout {
+                                    spacing: 6px * Palette.scale;
+
+                                    Text {
+                                        text: "DOCUMENTATION & FEATURES";
+                                        font-size: 9px * Palette.scale;
+                                        font-weight: 800;
+                                        letter-spacing: 2px * Palette.scale;
+                                        color: Palette.text-muted;
+                                    }
+
+                                    Card {
+                                        background: Palette.input-bg;
+                                        border-color: Palette.input-border;
+
+                                        VerticalLayout {
+                                            padding: 14px * Palette.scale;
+
+                                            Text {
+                                                text: selectedItem.long-description != "" ? selectedItem.long-description : selectedItem.description;
+                                                font-size: 12px * Palette.scale;
+                                                color: Palette.text-primary;
+                                                wrap: word-wrap;
+                                            }
+                                        }
+                                    }
+                                }
+
+                                // Technical Specifications / Info
+                                VerticalLayout {
+                                    spacing: 8px * Palette.scale;
+
+                                    Text {
+                                        text: "TECHNICAL DETAILS";
+                                        font-size: 9px * Palette.scale;
+                                        font-weight: 800;
+                                        letter-spacing: 2px * Palette.scale;
+                                        color: Palette.text-muted;
+                                    }
+
+                                    VerticalLayout {
+                                        spacing: 6px * Palette.scale;
+
+                                        if selectedItem.download-url != "" : Text {
+                                            text: "Download URL: " + selectedItem.download-url;
+                                            font-size: 11px * Palette.scale;
+                                            color: Palette.text-secondary;
+                                            wrap: word-wrap;
+                                        }
+
+                                        if selectedItem.source-url != "" : Text {
+                                            text: "Source Code: " + selectedItem.source-url;
+                                            font-size: 11px * Palette.scale;
+                                            color: Palette.text-secondary;
+                                            wrap: word-wrap;
+                                        }
+                                    }
+                                }
+                            }
+                        }
+                    }
+                }
             }
         }
     }

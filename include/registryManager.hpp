@@ -1,6 +1,7 @@
 #pragma once
 #include "registryEntry.hpp"
 #include <string>
+#include <vector>
 
 class RegistryManager
 {
@@ -9,8 +10,11 @@ class RegistryManager
         ~RegistryManager();
 
     public:
-        std::string fetchRegistry();
+        void fetchRegistry();
+        void parseRegistry();
+        void fetchAndParseRegistry();
         std::string REGISTRY_CONTENT;
+        std::vector<StoreItem> items;
 
     private:
         static constexpr std::string_view REGISTRY_URL = 

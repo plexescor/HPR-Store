@@ -15,6 +15,10 @@ GUI::~GUI() = default;
 void GUI::show()
 {
     ui->show();
+    if (eventBridge)
+    {
+        eventBridge->triggerRefresh();
+    }
 }
 
 void GUI::hide()
