@@ -4,6 +4,7 @@ HPR.versionSupport = { "v0.9.7" }
 
 local initializer, err
 local destroy, err1
+local showUi, err2
 
 function init()
     HPR.log(HPR.extensionName, HPR.extensionName .. " Initialized")
@@ -32,7 +33,8 @@ function init()
         HPR.log(HPR.extensionName, "Attempting to load library: " .. path)
         initializer, err = package.loadlib(path, "initialize")
         destroy, err1 = package.loadlib(path, "destroy")
-        if initializer and destroy then
+        showUi, err2 = package.loadlib(path, "showUi")
+        if initializer and destroy and showUi then
             dllPath = path
             break
         end
@@ -44,6 +46,9 @@ function init()
 
     HPR.log(HPR.extensionName, "destroy = " .. tostring(destroy))
     HPR.log(HPR.extensionName, "error = " .. tostring(err1))
+
+    HPR.log(HPR.extensionName, "special = " .. tostring(showUi))
+    HPR.log(HPR.extensionName, "error = " .. tostring(err2))
 
     if not initializer or not destroy then
         return
@@ -61,4 +66,10 @@ end
 
 function onExit()
     destroy()
+end
+
+function onAction()
+    if showUi then
+        showUi()
+    end
 end

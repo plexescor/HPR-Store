@@ -1,6 +1,9 @@
 #include "GUI.hpp"
 #include "lua.hpp"
 #include "sol.hpp"
+#include <future>
+#include <iostream>
+#include <memory>
 
 #ifdef _WIN32
 #define HPR_EXPORT __declspec(dllexport)
@@ -12,25 +15,44 @@ static std::unique_ptr<GUI> gui;
 
 extern "C" HPR_EXPORT void initialize(lua_State* L)
 {
-    slint::invoke_from_event_loop([] 
+    std::promise<void> ready;
+    auto fut = ready.get_future();
+
+    slint::invoke_from_event_loop([&ready]
     {
         gui = std::make_unique<GUI>();
-        gui->show();
+        ready.set_value();
     });
+
+    fut.wait();
 }
 
 extern "C" HPR_EXPORT void destroy(lua_State* L)
 {
-    slint::invoke_from_event_loop([] 
+    std::promise<void> done;
+    auto fut = done.get_future();
+
+    slint::invoke_from_event_loop([&done]
     {
         if (!gui)
         {
-            std::cout << "gui is null\n";
+            done.set_value();
             return;
         }
 
-        std::cout << "about to hide\n";
         gui->hide();
-        std::cout << "hide returned\n";
+        gui.reset(); 
+        done.set_value();
+    });
+
+    fut.wait();
+}
+
+extern "C" HPR_EXPORT void showUi(lua_State* L)
+{
+    slint::invoke_from_event_loop([]
+    {
+        if (!gui) return;
+        gui->show();
     });
 }
