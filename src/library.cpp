@@ -15,6 +15,8 @@
 static std::unique_ptr<GUI> gui;
 
 #ifdef _WIN32
+
+//thank you claude for this function pointer typa shit
 typedef void(*SlintInvokeFn)(void(*)(void*), void*);
 
 static SlintInvokeFn g_hprInvoke = nullptr;
