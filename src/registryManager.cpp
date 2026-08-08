@@ -197,17 +197,34 @@ std::vector<StoreItem> RegistryManager::getPage(int page) const
     return result;
 }
 
+#include "installer.hpp"
+#include <unordered_set>
+
 void RegistryManager::rebuildPageOrder()
 {
     pageOrder.clear();
 
-    // 1. Gather indices of all items matching activeTypeFilter
+    auto installedItems = Installer::loadInstalledItems();
+
+    // 1. Gather indices of all items matching activeTypeFilter and activeInstalledFilter
     for (int i = 0; i < static_cast<int>(allItems.size()); ++i)
     {
         const auto& item = allItems[i];
-        if (activeTypeFilter == 0 ||
+        
+        // Filter by Type (ALL/EXTENSION/THEME)
+        bool matchesType = (activeTypeFilter == 0 ||
             (activeTypeFilter == 1 && item.type == StoreItemType::EXTENSION) ||
-            (activeTypeFilter == 2 && item.type == StoreItemType::THEME))
+            (activeTypeFilter == 2 && item.type == StoreItemType::THEME));
+
+        if (!matchesType) continue;
+
+        // Filter by Installed status (ALL/INSTALLED/NOT INSTALLED)
+        bool isInstalled = (installedItems.find(item.id) != installedItems.end());
+        bool matchesInstalled = (activeInstalledFilter == 0 ||
+            (activeInstalledFilter == 1 && isInstalled) ||
+            (activeInstalledFilter == 2 && !isInstalled));
+
+        if (matchesInstalled)
         {
             pageOrder.push_back(i);
         }

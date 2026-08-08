@@ -2,6 +2,8 @@
 #include "registryEntry.hpp"
 #include <string>
 #include <filesystem>
+#include <functional>
+#include <unordered_map>
 
 struct InstallResult
 {
@@ -14,11 +16,22 @@ class Installer
 public:
     // Download, extract and install an item into HPR's theme or extension directory.
     // Blocks the calling thread — run from a background thread.
-    static InstallResult install(const StoreItem& item);
+    static InstallResult install(
+        const StoreItem& item,
+        std::function<void(std::string)> progressCallback = [](std::string){});
 
-private:
+    // Uninstall an item from HPR and update database.
+    static bool uninstall(const std::string& id, StoreItemType type);
+
+    // Installed status database helpers
+    static std::filesystem::path storeBasePath();
+    static std::unordered_map<std::string, std::string> loadInstalledItems();
+    static void saveInstalledItems(const std::unordered_map<std::string, std::string>& items);
+
     // Determine the HPR base config path (~/.config/HPR/ or %APPDATA%/HPR/HPR_Config/)
     static std::filesystem::path hprBasePath();
+
+private:
 
     // Download item.downloadUrl to a file inside tempDir.
     // Returns the path to the downloaded file, or empty on failure.

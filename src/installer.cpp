@@ -3,12 +3,15 @@
 #include <ixwebsocket/IXHttpClient.h>
 #include <archive.h>
 #include <archive_entry.h>
+#include <nlohmann/json.hpp>
 
 #include <filesystem>
 #include <fstream>
 #include <iostream>
 #include <string>
 #include <cstdlib>
+#include <algorithm>
+#include <sstream>
 
 // ─────────────────────────────────────────────────────────────────────────────
 // Internal helpers
@@ -25,6 +28,119 @@ std::filesystem::path Installer::hprBasePath()
     if (!home) return {};
     return std::filesystem::path(home) / ".config" / "HPR";
 #endif
+}
+
+std::filesystem::path Installer::storeBasePath()
+{
+#ifdef _WIN32
+    const char* appdata = std::getenv("APPDATA");
+    if (!appdata) return {};
+    return std::filesystem::path(appdata) / "HPR-Store";
+#else
+    const char* home = std::getenv("HOME");
+    if (!home) return {};
+    return std::filesystem::path(home) / ".config" / "HPR-Store";
+#endif
+}
+
+std::unordered_map<std::string, std::string> Installer::loadInstalledItems()
+{
+    std::unordered_map<std::string, std::string> installed;
+    auto base = storeBasePath();
+    if (base.empty()) return installed;
+
+    auto dbPath = base / "installed.json";
+    if (!std::filesystem::exists(dbPath)) return installed;
+
+    try
+    {
+        std::ifstream file(dbPath);
+        if (file.is_open())
+        {
+            nlohmann::json j;
+            file >> j;
+            if (j.is_object())
+            {
+                for (auto& el : j.items())
+                {
+                    if (el.value().is_string())
+                    {
+                        installed[el.key()] = el.value().get<std::string>();
+                    }
+                }
+            }
+        }
+    }
+    catch (const std::exception& e)
+    {
+        std::cerr << "[Installer] Failed to load installed database: " << e.what() << std::endl;
+    }
+    return installed;
+}
+
+void Installer::saveInstalledItems(const std::unordered_map<std::string, std::string>& items)
+{
+    auto base = storeBasePath();
+    if (base.empty()) return;
+
+    try
+    {
+        std::filesystem::create_directories(base);
+        auto dbPath = base / "installed.json";
+        nlohmann::json j = nlohmann::json::object();
+        for (const auto& pair : items)
+        {
+            j[pair.first] = pair.second;
+        }
+        std::ofstream file(dbPath, std::ios::trunc);
+        if (file.is_open())
+        {
+            file << j.dump(4);
+        }
+    }
+    catch (const std::exception& e)
+    {
+        std::cerr << "[Installer] Failed to save installed database: " << e.what() << std::endl;
+    }
+}
+
+bool Installer::uninstall(const std::string& id, StoreItemType type)
+{
+    auto installed = loadInstalledItems();
+    auto it = installed.find(id);
+    if (it == installed.end())
+    {
+        std::cerr << "[Installer] Uninstall failed: Item " << id << " not registered as installed." << std::endl;
+        return false;
+    }
+
+    auto folderName = it->second;
+    auto base = hprBasePath();
+    if (base.empty()) return false;
+
+    std::filesystem::path targetDir;
+    if (type == StoreItemType::THEME)
+        targetDir = base / "themes" / folderName;
+    else
+        targetDir = base / "extensions" / folderName;
+
+    std::cout << "[Installer] Uninstalling: deleting " << targetDir << std::endl;
+
+    try
+    {
+        if (std::filesystem::exists(targetDir))
+        {
+            std::filesystem::remove_all(targetDir);
+        }
+        installed.erase(it);
+        saveInstalledItems(installed);
+        return true;
+    }
+    catch (const std::exception& e)
+    {
+        std::cerr << "[Installer] Failed to remove directory: " << e.what() << std::endl;
+        return false;
+    }
 }
 
 std::filesystem::path Installer::downloadArchive(
@@ -201,7 +317,7 @@ std::filesystem::path Installer::findInstallRoot(
 // Public
 // ─────────────────────────────────────────────────────────────────────────────
 
-InstallResult Installer::install(const StoreItem& item)
+InstallResult Installer::install(const StoreItem& item, std::function<void(std::string)> progressCallback)
 {
     InstallResult result;
 
@@ -212,6 +328,7 @@ InstallResult Installer::install(const StoreItem& item)
     }
 
     // ── 1. Create temp dir ────────────────────────────────────────────────────
+    progressCallback("DOWNLOADING ARCHIVE...");
     std::filesystem::path tempBase;
     try
     {
@@ -227,6 +344,7 @@ InstallResult Installer::install(const StoreItem& item)
     // Ensure cleanup always runs
     auto cleanup = [&]()
     {
+        progressCallback("CLEANING UP...");
         try { std::filesystem::remove_all(tempBase); }
         catch (...) {}
     };
@@ -242,6 +360,7 @@ InstallResult Installer::install(const StoreItem& item)
     }
 
     // ── 3. Extract ────────────────────────────────────────────────────────────
+    progressCallback("EXTRACTING ARCHIVE...");
     auto extractedDir = tempBase / "extracted";
     std::filesystem::create_directories(extractedDir);
 
@@ -254,6 +373,7 @@ InstallResult Installer::install(const StoreItem& item)
     }
 
     // ── 4. Find install root ──────────────────────────────────────────────────
+    progressCallback("LOCATING ROOT FOLDER...");
     std::string findError;
     auto installRoot = findInstallRoot(extractedDir, item.type, findError);
     if (installRoot.empty())
@@ -263,7 +383,73 @@ InstallResult Installer::install(const StoreItem& item)
         return result;
     }
 
-    // ── 5. Copy to HPR directory ──────────────────────────────────────────────
+    // ── 5. Rename if parent is named "extracted" ──────────────────────────────
+    std::string targetFolderName = installRoot.filename().string();
+    if (targetFolderName == "extracted")
+    {
+        if (item.type == StoreItemType::EXTENSION)
+        {
+            // Find the .lua file and use its stem
+            for (const auto& entry : std::filesystem::recursive_directory_iterator(installRoot))
+            {
+                if (entry.is_regular_file() && entry.path().extension() == ".lua")
+                {
+                    targetFolderName = entry.path().stem().string();
+                    break;
+                }
+            }
+        }
+        else // THEME
+        {
+            // Parse metadata.csv name field
+            auto csvPath = installRoot / "metadata.csv";
+            if (std::filesystem::exists(csvPath))
+            {
+                std::ifstream csv(csvPath);
+                std::string line;
+                while (std::getline(csv, line))
+                {
+                    size_t comma = line.find(',');
+                    if (comma != std::string::npos)
+                    {
+                        std::string key = line.substr(0, comma);
+                        std::string val = line.substr(comma + 1);
+                        // Trim carriage returns and whitespace
+                        auto trim = [](std::string& s) {
+                            s.erase(std::remove_if(s.begin(), s.end(), [](unsigned char c) {
+                                return std::isspace(c) || c == '\r' || c == '\n';
+                            }), s.end());
+                        };
+                        trim(key);
+                        if (key == "name")
+                        {
+                            // Sanitize the theme name for directory usage (keep alphanumeric & hyphens)
+                            std::string cleaned;
+                            for (char c : val)
+                            {
+                                if (std::isalnum(static_cast<unsigned char>(c)))
+                                    cleaned += std::tolower(static_cast<unsigned char>(c));
+                                else if (std::isspace(static_cast<unsigned char>(c)) || c == '-' || c == '_')
+                                    cleaned += '-';
+                            }
+                            // Trim duplicate hyphens
+                            cleaned.erase(std::unique(cleaned.begin(), cleaned.end(), [](char a, char b) {
+                                return a == '-' && b == '-';
+                            }), cleaned.end());
+                            if (!cleaned.empty())
+                            {
+                                targetFolderName = cleaned;
+                            }
+                            break;
+                        }
+                    }
+                }
+            }
+        }
+    }
+
+    // ── 6. Copy to HPR directory ──────────────────────────────────────────────
+    progressCallback("COPYING FILES...");
     auto base = hprBasePath();
     if (base.empty())
     {
@@ -274,9 +460,9 @@ InstallResult Installer::install(const StoreItem& item)
 
     std::filesystem::path destDir;
     if (item.type == StoreItemType::THEME)
-        destDir = base / "themes" / installRoot.filename();
+        destDir = base / "themes" / targetFolderName;
     else
-        destDir = base / "extensions" / installRoot.filename();
+        destDir = base / "extensions" / targetFolderName;
 
     try
     {
@@ -294,7 +480,12 @@ InstallResult Installer::install(const StoreItem& item)
         return result;
     }
 
-    // ── 6. Cleanup ────────────────────────────────────────────────────────────
+    // ── 7. Update local installed database ────────────────────────────────────
+    auto installed = loadInstalledItems();
+    installed[item.id] = targetFolderName;
+    saveInstalledItems(installed);
+
+    // ── 8. Cleanup ────────────────────────────────────────────────────────────
     cleanup();
 
     result.success = true;

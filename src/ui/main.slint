@@ -45,9 +45,11 @@ component RefreshButton inherits Rectangle {
 
 component InstallButton inherits Rectangle {
     in property <string> label: "INSTALL";
+    in property <bool> installed: false;
+    in property <bool> is-delete: false;
     callback clicked;
 
-    width: 96px * Palette.scale;
+    width: 106px * Palette.scale;
     height: 30px * Palette.scale;
     border-radius: 6px * Palette.scale;
     border-width: 1px * Palette.scale;
@@ -61,15 +63,31 @@ component InstallButton inherits Rectangle {
     }
 
     states [
-        pressed when ta-install.pressed: {
+        delete-pressed when ta-install.pressed && root.is-delete: {
+            background: #ef444435;
+            border-color: #ef444480;
+        }
+        delete-hovered when ta-install.has-hover && root.is-delete: {
+            background: #ef444425;
+            border-color: #ef444460;
+        }
+        delete-normal when root.is-delete: {
+            background: #ef444412;
+            border-color: #ef444435;
+        }
+        disabled when root.installed && !root.is-delete: {
+            background: #ffffff08;
+            border-color: #ffffff15;
+        }
+        pressed when ta-install.pressed && !root.installed: {
             background: #38bdf835;
             border-color: #38bdf880;
         }
-        hovered when ta-install.has-hover: {
+        hovered when ta-install.has-hover && !root.installed: {
             background: #38bdf825;
             border-color: #38bdf860;
         }
-        normal when !ta-install.has-hover: {
+        normal when !ta-install.has-hover && !root.installed: {
             background: #38bdf812;
             border-color: #38bdf835;
         }
@@ -80,7 +98,11 @@ component InstallButton inherits Rectangle {
         font-size: 9.5px * Palette.scale;
         font-weight: 700;
         letter-spacing: 1.5px * Palette.scale;
-        color: ta-install.pressed ? #e0f2fe : (ta-install.has-hover ? #bae6fd : #38bdf8);
+        color: root.is-delete
+            ? (ta-install.pressed ? #fee2e2 : (ta-install.has-hover ? #fca5a5 : #ef4444))
+            : (root.installed 
+                ? Palette.text-muted 
+                : (ta-install.pressed ? #e0f2fe : (ta-install.has-hover ? #bae6fd : #38bdf8)));
         horizontal-alignment: center;
         vertical-alignment: center;
         animate color { duration: 100ms; }
@@ -126,7 +148,7 @@ export component StoreWindow inherits Window {
 
     in property <[StoreItem_S]> storeItems;
     property <bool> showDetailView: false;
-    property <StoreItem_S> selectedItem;
+    in-out property <StoreItem_S> selectedItem;
 
     // Pagination
     in property <int> totalItems: 0;
@@ -143,6 +165,7 @@ export component StoreWindow inherits Window {
 
     // Type filter: 0=BOTH, 1=EXTENSION, 2=THEME
     in property <int> activeTypeFilter: 0;
+    in property <int> activeInstalledFilter: 0; // 0=ALL, 1=INSTALLED, 2=NOT INSTALLED
 
     // Loading overlay for database updating
     in property <bool> databaseUpdating: false;
@@ -152,6 +175,8 @@ export component StoreWindow inherits Window {
     in-out property <bool> installResultVisible: false;
     in property <bool> installSuccess: false;
     in property <string> installErrorMessage: "";
+    in property <string> installProgressText: "INSTALLING...";
+    in property <bool> isUninstall: false;
 
     // Page jump state (private to UI)
     property <string> pageJumpText: "";
@@ -159,12 +184,14 @@ export component StoreWindow inherits Window {
 
     callback refresh-clicked();
     callback install-item-clicked(string);
+    callback uninstall-item-clicked(string);
     callback next-page-clicked();
     callback prev-page-clicked();
     callback go-to-page-clicked(string);  // C++ does int parsing & clamping
     callback sort-changed(int);
     callback item-selected(string);
     callback type-filter-changed(int);
+    callback installed-filter-changed(int);
 
 
     Rectangle {
@@ -327,6 +354,118 @@ export component StoreWindow inherits Window {
                                 ta-filter := TouchArea {
                                     mouse-cursor: pointer;
                                     clicked => { filterPopup.show(); }
+                                }
+                            }
+
+                            if !showDetailView : Rectangle {
+                                width: 140px * Palette.scale;
+                                height: 30px * Palette.scale;
+                                border-radius: 6px * Palette.scale;
+                                border-width: 1px * Palette.scale;
+                                border-color: ta-installed-filter.has-hover ? Palette.input-border-hover : Palette.input-border;
+                                background: ta-installed-filter.has-hover ? Palette.input-bg-hover : Palette.input-bg;
+                                y: (parent.height - self.height) / 2;
+
+                                HorizontalLayout {
+                                    padding-left: 10px * Palette.scale;
+                                    padding-right: 8px * Palette.scale;
+                                    alignment: space-between;
+
+                                    Text {
+                                        text: activeInstalledFilter == 0 ? "ALL STATUS" : (activeInstalledFilter == 1 ? "INSTALLED" : "NOT INSTALLED");
+                                        font-size: 10px * Palette.scale;
+                                        font-weight: 700;
+                                        color: Palette.text-primary;
+                                        vertical-alignment: center;
+                                    }
+                                    Text {
+                                        text: "▼";
+                                        font-size: 8px * Palette.scale;
+                                        color: Palette.text-secondary;
+                                        vertical-alignment: center;
+                                    }
+                                }
+
+                                installedFilterPopup := PopupWindow {
+                                    x: 0px;
+                                    y: 32px * Palette.scale;
+                                    width: 140px * Palette.scale;
+                                    height: 84px * Palette.scale;
+                                    close-policy: close-on-click-outside;
+
+                                    Rectangle {
+                                        width: 100%;
+                                        height: 100%;
+                                        background: Palette.card-background;
+                                        border-radius: 6px * Palette.scale;
+                                        border-width: 1px * Palette.scale;
+                                        border-color: Palette.card-border;
+
+                                        VerticalLayout {
+                                            padding: 4px * Palette.scale;
+                                            spacing: 2px * Palette.scale;
+
+                                            // ALL
+                                            Rectangle {
+                                                height: 24px * Palette.scale;
+                                                border-radius: 4px * Palette.scale;
+                                                background: ta-inst-all.has-hover ? Palette.input-bg-hover : transparent;
+                                                Text {
+                                                    text: "ALL STATUS";
+                                                    font-size: 9.5px * Palette.scale;
+                                                    font-weight: 700;
+                                                    color: activeInstalledFilter == 0 ? #38bdf8 : Palette.text-secondary;
+                                                    x: 8px * Palette.scale;
+                                                    vertical-alignment: center;
+                                                }
+                                                ta-inst-all := TouchArea {
+                                                    mouse-cursor: pointer;
+                                                    clicked => { root.installed-filter-changed(0); installedFilterPopup.close(); }
+                                                }
+                                            }
+                                            // INSTALLED
+                                            Rectangle {
+                                                height: 24px * Palette.scale;
+                                                border-radius: 4px * Palette.scale;
+                                                background: ta-inst-yes.has-hover ? Palette.input-bg-hover : transparent;
+                                                Text {
+                                                    text: "INSTALLED";
+                                                    font-size: 9.5px * Palette.scale;
+                                                    font-weight: 700;
+                                                    color: activeInstalledFilter == 1 ? #38bdf8 : Palette.text-secondary;
+                                                    x: 8px * Palette.scale;
+                                                    vertical-alignment: center;
+                                                }
+                                                ta-inst-yes := TouchArea {
+                                                    mouse-cursor: pointer;
+                                                    clicked => { root.installed-filter-changed(1); installedFilterPopup.close(); }
+                                                }
+                                            }
+                                            // NOT INSTALLED
+                                            Rectangle {
+                                                height: 24px * Palette.scale;
+                                                border-radius: 4px * Palette.scale;
+                                                background: ta-inst-no.has-hover ? Palette.input-bg-hover : transparent;
+                                                Text {
+                                                    text: "NOT INSTALLED";
+                                                    font-size: 9.5px * Palette.scale;
+                                                    font-weight: 700;
+                                                    color: activeInstalledFilter == 2 ? #38bdf8 : Palette.text-secondary;
+                                                    x: 8px * Palette.scale;
+                                                    vertical-alignment: center;
+                                                }
+                                                ta-inst-no := TouchArea {
+                                                    mouse-cursor: pointer;
+                                                    clicked => { root.installed-filter-changed(2); installedFilterPopup.close(); }
+                                                }
+                                            }
+                                        }
+                                    }
+                                }
+
+                                ta-installed-filter := TouchArea {
+                                    mouse-cursor: pointer;
+                                    clicked => { installedFilterPopup.show(); }
                                 }
                             }
 
@@ -691,8 +830,15 @@ export component StoreWindow inherits Window {
                                     }
 
                                     InstallButton {
-                                        label: "INSTALL";
-                                        clicked => { root.install-item-clicked(item.id); }
+                                        label: item.installed ? "DELETE" : "INSTALL";
+                                        is-delete: item.installed;
+                                        clicked => {
+                                            if (item.installed) {
+                                                root.uninstall-item-clicked(item.id);
+                                            } else {
+                                                root.install-item-clicked(item.id);
+                                            }
+                                        }
                                     }
                                 }
                             }
@@ -724,8 +870,15 @@ export component StoreWindow inherits Window {
                                     }
 
                                     InstallButton {
-                                        label: "INSTALL";
-                                        clicked => { root.install-item-clicked(selectedItem.id); }
+                                        label: selectedItem.installed ? "DELETE" : "INSTALL";
+                                        is-delete: selectedItem.installed;
+                                        clicked => {
+                                            if (selectedItem.installed) {
+                                                root.uninstall-item-clicked(selectedItem.id);
+                                            } else {
+                                                root.install-item-clicked(selectedItem.id);
+                                            }
+                                        }
                                     }
                                 }
 
@@ -1075,7 +1228,7 @@ export component StoreWindow inherits Window {
                 }
 
                 Text {
-                    text: "INSTALLING...";
+                    text: root.installProgressText;
                     font-size: 11px * Palette.scale;
                     font-weight: 800;
                     letter-spacing: 2px * Palette.scale;
@@ -1121,7 +1274,9 @@ export component StoreWindow inherits Window {
                         }
 
                         Text {
-                            text: installSuccess ? "Installed Successfully" : "Installation Failed";
+                            text: installSuccess 
+                                ? (isUninstall ? "Uninstalled Successfully" : "Installed Successfully") 
+                                : (isUninstall ? "Uninstallation Failed" : "Installation Failed");
                             font-size: 18px * Palette.scale;
                             font-weight: 800;
                             color: Palette.text-primary;
@@ -1131,7 +1286,9 @@ export component StoreWindow inherits Window {
 
                     Text {
                         text: installSuccess
-                            ? "The item has been installed. Restart HPR to apply changes."
+                            ? (isUninstall 
+                                ? "The item has been deleted. Restart HPR to apply changes." 
+                                : "The item has been installed. Press the rescan/refresh button in the respective HPR menu to apply changes.")
                             : installErrorMessage;
                         font-size: 11px * Palette.scale;
                         font-weight: 500;

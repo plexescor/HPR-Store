@@ -20,6 +20,23 @@ static std::string sanitizeMarkdownForSlint(const std::string& input)
     while (std::getline(stream, line))
     {
         size_t firstChar = line.find_first_not_of(" \t");
+        if (firstChar != std::string::npos)
+        {
+            // Strip or convert blockquote prefix '>'
+            if (line[firstChar] == '>')
+            {
+                line.erase(0, firstChar + 1);
+                // strip leading spaces after >
+                size_t afterBtn = line.find_first_not_of(" \t");
+                if (afterBtn != std::string::npos) {
+                    line = line.substr(afterBtn);
+                } else {
+                    line.clear();
+                }
+                firstChar = line.find_first_not_of(" \t");
+            }
+        }
+
         if (firstChar != std::string::npos && line[firstChar] == '#')
         {
             size_t hashEnd = line.find_first_not_of("#", firstChar);
@@ -45,7 +62,7 @@ static std::string sanitizeMarkdownForSlint(const std::string& input)
     return result;
 }
 
-static StoreItem_S toSlintStoreItem(const StoreItem& item)
+static StoreItem_S toSlintStoreItem(const StoreItem& item, const std::unordered_map<std::string, std::string>& installedItems)
 {
     StoreItem_S s;
     s.id = slint::SharedString(item.id);
@@ -77,6 +94,7 @@ static StoreItem_S toSlintStoreItem(const StoreItem& item)
     s.download_count = item.downloadCount;
     s.star_count = item.starCount;
     s.last_updated = slint::SharedString(item.lastUpdated);
+    s.installed = (installedItems.find(item.id) != installedItems.end());
 
     return s;
 }
@@ -92,10 +110,12 @@ void UIEventBridge::updateStoreItemsUI()
 {
     if (!registryManager) return;
 
+    auto installedItems = Installer::loadInstalledItems();
+
     auto pageItems = registryManager->getPage(currentPage);
     auto itemsModel = std::make_shared<slint::VectorModel<StoreItem_S>>();
     for (const auto& item : pageItems)
-        itemsModel->push_back(toSlintStoreItem(item));
+        itemsModel->push_back(toSlintStoreItem(item, installedItems));
 
     ui->set_storeItems(itemsModel);
     updatePaginationUI();
@@ -250,6 +270,24 @@ void UIEventBridge::setupEvents()
         }).detach();
     });
 
+    ui->on_installed_filter_changed([this](int filter)
+    {
+        if (!registryManager) return;
+        std::thread([this, filter]()
+        {
+            std::cout << "[UIEventBridge] Installed status filter changed: " << filter << std::endl;
+            registryManager->activeInstalledFilter = filter;
+            registryManager->rebuildPageOrder();
+            currentPage = 0;
+
+            slint::invoke_from_event_loop([this, filter]()
+            {
+                ui->set_activeInstalledFilter(filter);
+                updateStoreItemsUI();
+            });
+        }).detach();
+    });
+
     ui->on_item_selected([this](slint::SharedString itemIdStr)
     {
         if (!registryManager) return;
@@ -368,18 +406,84 @@ void UIEventBridge::setupEvents()
 
         std::cout << "[UIEventBridge] Install requested for: " << itemId.data() << std::endl;
         ui->set_installing(true);
+        ui->set_isUninstall(false);
+        ui->set_installProgressText("STARTING INSTALLATION...");
         ui->set_installResultVisible(false);
 
         std::thread([this, item = *maybeItem]()
         {
-            InstallResult result = Installer::install(item);
+            InstallResult result = Installer::install(item, [this](std::string progress) {
+                slint::invoke_from_event_loop([this, progress]() {
+                    ui->set_installProgressText(slint::SharedString(progress));
+                });
+            });
 
-            slint::invoke_from_event_loop([this, result]()
+            slint::invoke_from_event_loop([this, result, item]()
             {
                 ui->set_installing(false);
                 ui->set_installSuccess(result.success);
                 ui->set_installErrorMessage(slint::SharedString(result.errorMessage));
                 ui->set_installResultVisible(true);
+                
+                // Instantly update the list items to show "INSTALLED" if successful
+                if (result.success)
+                {
+                    updateStoreItemsUI();
+                    
+                    // Also update the currently open detail view selectedItem copy's installed state
+                    auto currentSelected = ui->get_selectedItem();
+                    if (std::string(currentSelected.id) == item.id)
+                    {
+                        currentSelected.installed = true;
+                        ui->set_selectedItem(currentSelected);
+                    }
+                }
+            });
+        }).detach();
+    });
+
+    ui->on_uninstall_item_clicked([this](slint::SharedString itemId)
+    {
+        if (!registryManager) return;
+
+        auto maybeItem = registryManager->getItemById(std::string(itemId));
+        if (!maybeItem)
+        {
+            std::cerr << "[UIEventBridge] Uninstall: item not found: " << itemId.data() << std::endl;
+            return;
+        }
+
+        std::cout << "[UIEventBridge] Uninstall requested for: " << itemId.data() << std::endl;
+        ui->set_installing(true);
+        ui->set_isUninstall(true);
+        ui->set_installProgressText("UNINSTALLING...");
+        ui->set_installResultVisible(false);
+
+        std::thread([this, item = *maybeItem]()
+        {
+            bool success = Installer::uninstall(item.id, item.type);
+
+            slint::invoke_from_event_loop([this, success, item]()
+            {
+                ui->set_installing(false);
+                ui->set_installSuccess(success);
+                if (success) {
+                    ui->set_installErrorMessage(slint::SharedString("Item uninstalled successfully."));
+                } else {
+                    ui->set_installErrorMessage(slint::SharedString("Failed to uninstall the item."));
+                }
+                ui->set_installResultVisible(true);
+                
+                // Instantly update UI list
+                updateStoreItemsUI();
+
+                // If currently open detail view is the uninstalled item, update its state
+                auto currentSelected = ui->get_selectedItem();
+                if (std::string(currentSelected.id) == item.id)
+                {
+                    currentSelected.installed = false;
+                    ui->set_selectedItem(currentSelected);
+                }
             });
         }).detach();
     });

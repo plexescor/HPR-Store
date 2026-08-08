@@ -37,6 +37,7 @@ class RegistryManager
         std::unordered_set<std::string> seenIds;
         SortMode currentSort = SortMode::NONE;
         int activeTypeFilter = 0; // 0=BOTH, 1=EXTENSION, 2=THEME
+        int activeInstalledFilter = 0; // 0=ALL, 1=INSTALLED, 2=NOT INSTALLED
         int totalItemCount = 0;
         static constexpr int PAGE_SIZE = 100;
 
