@@ -132,7 +132,17 @@ add_custom_command(TARGET HPR-Store POST_BUILD
         "$<TARGET_FILE_DIR:HPR-Store>/HPR-Store.lua"
         "${HPR_EXTENSION_DIR}/"
 
+    COMMAND ${CMAKE_COMMAND} -E copy_if_different
+        "${CMAKE_CURRENT_SOURCE_DIR}/registry.json"
+        "${HPR_EXTENSION_DIR}/registry.json"
+
     COMMAND_EXPAND_LISTS
+)
+
+add_custom_command(TARGET HPR-Store POST_BUILD
+    COMMAND ${CMAKE_COMMAND} -E copy_if_different
+        "${CMAKE_CURRENT_SOURCE_DIR}/registry.json"
+        "$<TARGET_FILE_DIR:HPR-Store>/registry.json"
 )
 
 if(WIN32)

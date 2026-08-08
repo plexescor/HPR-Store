@@ -141,6 +141,9 @@ export component StoreWindow inherits Window {
     in-out property <int> currentPreviewIndex: 0;
     in property <bool> previewLoading: false;
 
+    // Type filter: 0=BOTH, 1=EXTENSION, 2=THEME
+    in property <int> activeTypeFilter: 0;
+
     // Page jump state (private to UI)
     property <string> pageJumpText: "";
     property <bool> pageJumpInvalid: false;
@@ -152,6 +155,7 @@ export component StoreWindow inherits Window {
     callback go-to-page-clicked(string);  // C++ does int parsing & clamping
     callback sort-changed(int);
     callback item-selected(string);
+    callback type-filter-changed(int);
 
 
     Rectangle {
@@ -205,8 +209,120 @@ export component StoreWindow inherits Window {
                             spacing: 10px * Palette.scale;
                             alignment: end;
 
+                            if !showDetailView : Rectangle {
+                                width: 110px * Palette.scale;
+                                height: 30px * Palette.scale;
+                                border-radius: 6px * Palette.scale;
+                                border-width: 1px * Palette.scale;
+                                border-color: ta-filter.has-hover ? Palette.input-border-hover : Palette.input-border;
+                                background: ta-filter.has-hover ? Palette.input-bg-hover : Palette.input-bg;
+                                y: (parent.height - self.height) / 2;
+
+                                HorizontalLayout {
+                                    padding-left: 10px * Palette.scale;
+                                    padding-right: 8px * Palette.scale;
+                                    alignment: space-between;
+
+                                    Text {
+                                        text: activeTypeFilter == 0 ? "ALL" : (activeTypeFilter == 1 ? "EXTENSIONS" : "THEMES");
+                                        font-size: 10px * Palette.scale;
+                                        font-weight: 700;
+                                        color: Palette.text-primary;
+                                        vertical-alignment: center;
+                                    }
+                                    Text {
+                                        text: "▼";
+                                        font-size: 8px * Palette.scale;
+                                        color: Palette.text-secondary;
+                                        vertical-alignment: center;
+                                    }
+                                }
+
+                                filterPopup := PopupWindow {
+                                    x: 0px;
+                                    y: 32px * Palette.scale;
+                                    width: 110px * Palette.scale;
+                                    height: 84px * Palette.scale;
+                                    close-policy: close-on-click-outside;
+
+                                    Rectangle {
+                                        width: 100%;
+                                        height: 100%;
+                                        background: Palette.card-background;
+                                        border-radius: 6px * Palette.scale;
+                                        border-width: 1px * Palette.scale;
+                                        border-color: Palette.card-border;
+
+                                        VerticalLayout {
+                                            padding: 4px * Palette.scale;
+                                            spacing: 2px * Palette.scale;
+
+                                            // BOTH / ALL
+                                            Rectangle {
+                                                height: 24px * Palette.scale;
+                                                border-radius: 4px * Palette.scale;
+                                                background: ta-all.has-hover ? Palette.input-bg-hover : transparent;
+                                                Text {
+                                                    text: "ALL";
+                                                    font-size: 9.5px * Palette.scale;
+                                                    font-weight: 700;
+                                                    color: activeTypeFilter == 0 ? #38bdf8 : Palette.text-secondary;
+                                                    x: 8px * Palette.scale;
+                                                    vertical-alignment: center;
+                                                }
+                                                ta-all := TouchArea {
+                                                    mouse-cursor: pointer;
+                                                    clicked => { root.type-filter-changed(0); filterPopup.close(); }
+                                                }
+                                            }
+                                            // EXTENSION
+                                            Rectangle {
+                                                height: 24px * Palette.scale;
+                                                border-radius: 4px * Palette.scale;
+                                                background: ta-ext.has-hover ? Palette.input-bg-hover : transparent;
+                                                Text {
+                                                    text: "EXTENSIONS";
+                                                    font-size: 9.5px * Palette.scale;
+                                                    font-weight: 700;
+                                                    color: activeTypeFilter == 1 ? #38bdf8 : Palette.text-secondary;
+                                                    x: 8px * Palette.scale;
+                                                    vertical-alignment: center;
+                                                }
+                                                ta-ext := TouchArea {
+                                                    mouse-cursor: pointer;
+                                                    clicked => { root.type-filter-changed(1); filterPopup.close(); }
+                                                }
+                                            }
+                                            // THEME
+                                            Rectangle {
+                                                height: 24px * Palette.scale;
+                                                border-radius: 4px * Palette.scale;
+                                                background: ta-thm.has-hover ? Palette.input-bg-hover : transparent;
+                                                Text {
+                                                    text: "THEMES";
+                                                    font-size: 9.5px * Palette.scale;
+                                                    font-weight: 700;
+                                                    color: activeTypeFilter == 2 ? #38bdf8 : Palette.text-secondary;
+                                                    x: 8px * Palette.scale;
+                                                    vertical-alignment: center;
+                                                }
+                                                ta-thm := TouchArea {
+                                                    mouse-cursor: pointer;
+                                                    clicked => { root.type-filter-changed(2); filterPopup.close(); }
+                                                }
+                                            }
+                                        }
+                                    }
+                                }
+
+                                ta-filter := TouchArea {
+                                    mouse-cursor: pointer;
+                                    clicked => { filterPopup.show(); }
+                                }
+                            }
+
                             RefreshButton {
-                                label: "REFRESH";
+                                label: "UPDATE DATABASE";
                                 primary: true;
                                 y: (parent.height - self.height) / 2;
                                 clicked => { root.refresh-clicked(); }

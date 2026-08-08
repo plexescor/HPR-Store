@@ -14,33 +14,29 @@ class RegistryManager
         ~RegistryManager();
 
     public:
-        // Normal browsing: fetch to temp file, shuffle, page through
-        void fetchRegistryToTemp();
-        void parseRegistryFromTemp();
-        void fetchAndParseToTemp();
+        // Local database path next to the library
+        std::filesystem::path getLocalRegistryPath() const;
+
+        // Normal browsing: read local file directly, shuffle, page through
+        void readLocalRegistry();
+        void updateDatabase(); // Download remote registry and replace the local file
 
         // Sort mode only: full dataset in memory
-        void fetchRegistry();
-        void parseRegistry();
-        void fetchAndParseRegistry();
-
         void sortItems(SortMode mode);
         std::vector<StoreItem> getPage(int page) const;
-        void enrichItemsFromGitHub();         // Fills missing star/version/lastUpdated in parallel
+        void rebuildPageOrder();
 
     public:
-        std::string REGISTRY_CONTENT;
         std::vector<StoreItem> items;        // Current page or sort window
-        std::vector<StoreItem> allItems;     // Full dataset (sort mode only)
+        std::vector<StoreItem> allItems;     // Full dataset
         std::vector<int> pageOrder;          // Shuffled indices into allItems
         std::unordered_set<std::string> seenIds;
         SortMode currentSort = SortMode::NONE;
+        int activeTypeFilter = 0; // 0=BOTH, 1=EXTENSION, 2=THEME
         int totalItemCount = 0;
         static constexpr int PAGE_SIZE = 100;
 
     private:
-        std::filesystem::path getTempFilePath() const;
-
         static constexpr std::string_view REGISTRY_URL =
             "api.github.com";
         static constexpr std::string_view REGISTRY_PATH =

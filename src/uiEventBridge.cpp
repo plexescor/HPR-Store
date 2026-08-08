@@ -109,6 +109,7 @@ void UIEventBridge::updatePaginationUI()
     ui->set_currentPage(currentPage);
     ui->set_totalPages(totalPages);
     ui->set_currentSort(static_cast<int>(registryManager->currentSort));
+    ui->set_activeTypeFilter(registryManager->activeTypeFilter);
 }
 
 void UIEventBridge::goToPage(int page)
@@ -137,16 +138,13 @@ void UIEventBridge::setSortMode(int mode)
     {
         if (mode == 0)
         {
-            // Back to normal browsing: re-fetch and re-shuffle
-            std::cout << "[UIEventBridge] Sort reset — re-fetching to temp." << std::endl;
-            registryManager->fetchAndParseToTemp();
+            std::cout << "[UIEventBridge] Sort reset — reloading local database." << std::endl;
+            registryManager->currentSort = SortMode::NONE;
+            registryManager->readLocalRegistry();
         }
         else
         {
-            // Sort mode: fetch full dataset into memory and sort
-            std::cout << "[UIEventBridge] Sort mode " << mode << " — fetching full dataset." << std::endl;
-            registryManager->fetchAndParseRegistry();
-
+            // Sort mode: sort currently parsed in-memory allItems
             SortMode sortMode = (mode == 1) ? SortMode::STARS_DESC : SortMode::DOWNLOADS_DESC;
             registryManager->sortItems(sortMode);
         }
@@ -166,8 +164,8 @@ void UIEventBridge::triggerRefresh()
 
     std::thread([this]()
     {
-        std::cout << "[UIEventBridge] showUi triggered: fetching and parsing registry asynchronously..." << std::endl;
-        registryManager->fetchAndParseToTemp();
+        std::cout << "[UIEventBridge] showUi triggered: reading local database..." << std::endl;
+        registryManager->readLocalRegistry();
         currentPage = 0;
 
         slint::invoke_from_event_loop([this]()
@@ -183,8 +181,16 @@ void UIEventBridge::setupEvents()
 
     ui->on_refresh_clicked([this]()
     {
-        std::cout << "[UIEventBridge] Refresh clicked." << std::endl;
-        triggerRefresh();
+        std::cout << "[UIEventBridge] Update Database clicked. Fetching remote updates..." << std::endl;
+        std::thread([this]()
+        {
+            registryManager->updateDatabase();
+            currentPage = 0;
+            slint::invoke_from_event_loop([this]()
+            {
+                updateStoreItemsUI();
+            });
+        }).detach();
     });
 
     ui->on_next_page_clicked([this]()
@@ -221,6 +227,24 @@ void UIEventBridge::setupEvents()
     ui->on_sort_changed([this](int mode)
     {
         setSortMode(mode);
+    });
+
+    ui->on_type_filter_changed([this](int filter)
+    {
+        if (!registryManager) return;
+        std::thread([this, filter]()
+        {
+            std::cout << "[UIEventBridge] Type filter changed: " << filter << std::endl;
+            registryManager->activeTypeFilter = filter;
+            registryManager->rebuildPageOrder();
+            currentPage = 0;
+
+            slint::invoke_from_event_loop([this, filter]()
+            {
+                ui->set_activeTypeFilter(filter);
+                updateStoreItemsUI();
+            });
+        }).detach();
     });
 
     ui->on_item_selected([this](slint::SharedString itemIdStr)
