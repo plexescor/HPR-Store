@@ -128,8 +128,31 @@ export component StoreWindow inherits Window {
     property <bool> showDetailView: false;
     property <StoreItem_S> selectedItem;
 
+    // Pagination
+    in property <int> totalItems: 0;
+    in property <int> currentPage: 0;
+    in property <int> totalPages: 1;
+    // Sort: 0=none, 1=stars, 2=downloads
+    in property <int> currentSort: 0;
+
+    // Carousel & Preview images
+    in property <[image]> selectedPreviewImages: [];
+    in property <int> selectedPreviewImageCount: 0;
+    in-out property <int> currentPreviewIndex: 0;
+    in property <bool> previewLoading: false;
+
+    // Page jump state (private to UI)
+    property <string> pageJumpText: "";
+    property <bool> pageJumpInvalid: false;
+
     callback refresh-clicked();
     callback install-item-clicked(string);
+    callback next-page-clicked();
+    callback prev-page-clicked();
+    callback go-to-page-clicked(string);  // C++ does int parsing & clamping
+    callback sort-changed(int);
+    callback item-selected(string);
+
 
     Rectangle {
         width: 100%;
@@ -142,7 +165,9 @@ export component StoreWindow inherits Window {
 
             // ── Topbar ───────────────────────────────────────────────────
             topbar := Rectangle {
-                height: 46px * Palette.scale;
+                height: !showDetailView && totalItems > 0
+                    ? (totalPages > 1 ? 86px * Palette.scale : 78px * Palette.scale)
+                    : 46px * Palette.scale;
                 background: Palette.background;
 
                 Rectangle {
@@ -151,34 +176,244 @@ export component StoreWindow inherits Window {
                     background: @linear-gradient(90deg, transparent 0%, Palette.divider 40%, Palette.divider 60%, transparent 100%);
                 }
 
-                HorizontalLayout {
-                    padding-left: 18px * Palette.scale;
-                    padding-right: 18px * Palette.scale;
-                    alignment: space-between;
+                VerticalLayout {
+                    padding: 0px;
+                    spacing: 0px;
 
+                    // ── Row 1: Title + Refresh ──────────────────────────
                     HorizontalLayout {
-                        spacing: 10px * Palette.scale;
-                        alignment: start;
+                        height: 46px * Palette.scale;
+                        padding-left: 18px * Palette.scale;
+                        padding-right: 18px * Palette.scale;
+                        alignment: space-between;
 
-                        Text {
-                            text: "HPR STORE";
-                            color: Palette.text-primary;
-                            font-size: 12px * Palette.scale;
-                            font-weight: 700;
-                            letter-spacing: 4px * Palette.scale;
-                            vertical-alignment: center;
+                        HorizontalLayout {
+                            spacing: 10px * Palette.scale;
+                            alignment: start;
+
+                            Text {
+                                text: "HPR STORE";
+                                color: Palette.text-primary;
+                                font-size: 12px * Palette.scale;
+                                font-weight: 700;
+                                letter-spacing: 4px * Palette.scale;
+                                vertical-alignment: center;
+                            }
+                        }
+
+                        HorizontalLayout {
+                            spacing: 10px * Palette.scale;
+                            alignment: end;
+
+                            RefreshButton {
+                                label: "REFRESH";
+                                primary: true;
+                                y: (parent.height - self.height) / 2;
+                                clicked => { root.refresh-clicked(); }
+                            }
                         }
                     }
 
-                    HorizontalLayout {
-                        spacing: 10px * Palette.scale;
-                        alignment: end;
+                    // ── Row 2: Sort + Pagination (only in list view with items) ──
+                    if !showDetailView && totalItems > 0 : HorizontalLayout {
+                        height: totalPages > 1 ? 36px * Palette.scale : 28px * Palette.scale;
+                        padding-left: 18px * Palette.scale;
+                        padding-right: 18px * Palette.scale;
+                        padding-bottom: 6px * Palette.scale;
+                        alignment: space-between;
 
-                        RefreshButton {
-                            label: "REFRESH";
-                            primary: true;
-                            y: (parent.height - self.height) / 2;
-                            clicked => { root.refresh-clicked(); }
+                        // Sort buttons
+                        HorizontalLayout {
+                            spacing: 6px * Palette.scale;
+                            alignment: start;
+
+                            Rectangle {
+                                width: sortStarsLabel.preferred-width + 18px * Palette.scale;
+                                height: 22px * Palette.scale;
+                                border-radius: 5px * Palette.scale;
+                                border-width: 1px * Palette.scale;
+                                border-color: currentSort == 1 ? #facc1560 : Palette.input-border;
+                                background: currentSort == 1 ? #facc1518 : (sortStarsTA.has-hover ? Palette.input-bg-hover : Palette.input-bg);
+                                animate background { duration: 100ms; }
+
+                                sortStarsLabel := Text {
+                                    text: "⭐ Stars";
+                                    font-size: 9.5px * Palette.scale;
+                                    font-weight: 700;
+                                    color: currentSort == 1 ? #facc15 : Palette.text-secondary;
+                                    horizontal-alignment: center;
+                                    vertical-alignment: center;
+                                }
+                                sortStarsTA := TouchArea {
+                                    mouse-cursor: pointer;
+                                    clicked => { root.sort-changed(currentSort == 1 ? 0 : 1); }
+                                }
+                            }
+
+                            Rectangle {
+                                width: sortDlLabel.preferred-width + 18px * Palette.scale;
+                                height: 22px * Palette.scale;
+                                border-radius: 5px * Palette.scale;
+                                border-width: 1px * Palette.scale;
+                                border-color: currentSort == 2 ? #38bdf860 : Palette.input-border;
+                                background: currentSort == 2 ? #38bdf818 : (sortDlTA.has-hover ? Palette.input-bg-hover : Palette.input-bg);
+                                animate background { duration: 100ms; }
+
+                                sortDlLabel := Text {
+                                    text: "↓ Downloads";
+                                    font-size: 9.5px * Palette.scale;
+                                    font-weight: 700;
+                                    color: currentSort == 2 ? #38bdf8 : Palette.text-secondary;
+                                    horizontal-alignment: center;
+                                    vertical-alignment: center;
+                                }
+                                sortDlTA := TouchArea {
+                                    mouse-cursor: pointer;
+                                    clicked => { root.sort-changed(currentSort == 2 ? 0 : 2); }
+                                }
+                            }
+
+                            if currentSort != 0 : Rectangle {
+                                width: sortDefaultLabel.preferred-width + 18px * Palette.scale;
+                                height: 22px * Palette.scale;
+                                border-radius: 5px * Palette.scale;
+                                border-width: 1px * Palette.scale;
+                                border-color: Palette.input-border;
+                                background: sortDefaultTA.has-hover ? Palette.input-bg-hover : Palette.input-bg;
+                                animate background { duration: 100ms; }
+
+                                sortDefaultLabel := Text {
+                                    text: "✕ Default";
+                                    font-size: 9.5px * Palette.scale;
+                                    font-weight: 700;
+                                    color: Palette.text-muted;
+                                    horizontal-alignment: center;
+                                    vertical-alignment: center;
+                                }
+                                sortDefaultTA := TouchArea {
+                                    mouse-cursor: pointer;
+                                    clicked => { root.sort-changed(0); }
+                                }
+                            }
+                        }
+
+                        // Pagination controls (only when more than 1 page)
+                        if totalPages > 1 : HorizontalLayout {
+                            spacing: 6px * Palette.scale;
+                            alignment: end;
+
+                            // Prev button
+                            Rectangle {
+                                width: 28px * Palette.scale;
+                                height: 22px * Palette.scale;
+                                border-radius: 5px * Palette.scale;
+                                border-width: 1px * Palette.scale;
+                                border-color: currentPage == 0 ? Palette.divider : Palette.input-border;
+                                background: currentPage == 0 ? Palette.background : (prevTA.has-hover ? Palette.input-bg-hover : Palette.input-bg);
+                                animate background { duration: 100ms; }
+
+                                Text {
+                                    text: "←";
+                                    font-size: 11px * Palette.scale;
+                                    font-weight: 700;
+                                    color: currentPage == 0 ? Palette.text-muted : Palette.text-secondary;
+                                    horizontal-alignment: center;
+                                    vertical-alignment: center;
+                                }
+                                prevTA := TouchArea {
+                                    mouse-cursor: currentPage == 0 ? default : pointer;
+                                    clicked => { if currentPage > 0 { root.prev-page-clicked(); } }
+                                }
+                            }
+
+                            // Page indicator
+                            Text {
+                                text: "Page " + (currentPage + 1) + " / " + totalPages;
+                                font-size: 9.5px * Palette.scale;
+                                font-weight: 600;
+                                color: Palette.text-secondary;
+                                vertical-alignment: center;
+                            }
+
+                            // Page jump input
+                            Rectangle {
+                                width: 36px * Palette.scale;
+                                height: 22px * Palette.scale;
+                                border-radius: 5px * Palette.scale;
+                                border-width: 1px * Palette.scale;
+                                border-color: pageJumpInvalid ? #f8717160 : Palette.input-border;
+                                background: Palette.input-bg;
+
+                                pageJumpInput := TextInput {
+                                    x: 4px * Palette.scale;
+                                    width: parent.width - 8px * Palette.scale;
+                                    height: parent.height;
+                                    text <=> root.pageJumpText;
+                                    font-size: 9.5px * Palette.scale;
+                                    color: pageJumpInvalid ? #f87171 : Palette.text-primary;
+                                    vertical-alignment: center;
+                                    horizontal-alignment: center;
+                                    single-line: true;
+                                    input-type: number;
+                                }
+                            }
+
+                            // Apply page jump button
+                            Rectangle {
+                                width: applyLabel.preferred-width + 14px * Palette.scale;
+                                height: 22px * Palette.scale;
+                                border-radius: 5px * Palette.scale;
+                                border-width: 1px * Palette.scale;
+                                border-color: #38bdf840;
+                                background: applyTA.has-hover ? #38bdf820 : #38bdf810;
+                                animate background { duration: 100ms; }
+
+                                applyLabel := Text {
+                                    text: "GO";
+                                    font-size: 9.5px * Palette.scale;
+                                    font-weight: 700;
+                                    color: #38bdf8;
+                                    horizontal-alignment: center;
+                                    vertical-alignment: center;
+                                }
+                                applyTA := TouchArea {
+                                    mouse-cursor: pointer;
+                                    clicked => {
+                                        if root.pageJumpText == "" {
+                                            root.pageJumpInvalid = true;
+                                        } else {
+                                            root.pageJumpInvalid = false;
+                                            // Pass raw string to C++ for int parsing, range clamping & validation
+                                            root.go-to-page-clicked(root.pageJumpText);
+                                            root.pageJumpText = "";
+                                        }
+                                    }
+                                }
+                            }
+
+                            // Next button
+                            Rectangle {
+                                width: 28px * Palette.scale;
+                                height: 22px * Palette.scale;
+                                border-radius: 5px * Palette.scale;
+                                border-width: 1px * Palette.scale;
+                                border-color: currentPage >= totalPages - 1 ? Palette.divider : Palette.input-border;
+                                background: currentPage >= totalPages - 1 ? Palette.background : (nextTA.has-hover ? Palette.input-bg-hover : Palette.input-bg);
+                                animate background { duration: 100ms; }
+
+                                Text {
+                                    text: "→";
+                                    font-size: 11px * Palette.scale;
+                                    font-weight: 700;
+                                    color: currentPage >= totalPages - 1 ? Palette.text-muted : Palette.text-secondary;
+                                    horizontal-alignment: center;
+                                    vertical-alignment: center;
+                                }
+                                nextTA := TouchArea {
+                                    mouse-cursor: currentPage >= totalPages - 1 ? default : pointer;
+                                    clicked => { if currentPage < totalPages - 1 { root.next-page-clicked(); } }
+                                }
+                            }
                         }
                     }
                 }
@@ -219,6 +454,8 @@ export component StoreWindow inherits Window {
                                 clicked => {
                                     root.selectedItem = item;
                                     root.showDetailView = true;
+                                    root.currentPreviewIndex = 0;
+                                    root.item-selected(item.id);
                                 }
                             }
 
@@ -498,8 +735,105 @@ export component StoreWindow inherits Window {
                                     }
                                 }
 
+                                // Carousel Section (Only for THEME items when preview images exist or are loading)
+                                if selectedItem.item-type == "THEME" && (selectedPreviewImageCount > 0 || previewLoading) : VerticalLayout {
+                                    spacing: 6px * Palette.scale;
+
+                                    Text {
+                                        text: "THEME PREVIEW";
+                                        font-size: 9px * Palette.scale;
+                                        font-weight: 800;
+                                        letter-spacing: 2px * Palette.scale;
+                                        color: Palette.text-muted;
+                                    }
+
+                                    Card {
+                                        height: 320px * Palette.scale;
+                                        background: Palette.input-bg;
+                                        border-color: Palette.input-border;
+                                        clip: true;
+
+                                        if previewLoading : Rectangle {
+                                            Text {
+                                                text: "Loading previews...";
+                                                font-size: 13px * Palette.scale;
+                                                color: Palette.text-muted;
+                                                horizontal-alignment: center;
+                                                vertical-alignment: center;
+                                            }
+                                        }
+
+                                        if !previewLoading && selectedPreviewImageCount > 0 : Rectangle {
+                                            Image {
+                                                width: 100%;
+                                                height: 100%;
+                                                source: root.selectedPreviewImages[root.currentPreviewIndex];
+                                                image-fit: contain;
+                                            }
+
+                                            // Navigation controls (prev)
+                                            if selectedPreviewImageCount > 1 : Rectangle {
+                                                x: 12px * Palette.scale;
+                                                y: (parent.height - self.height) / 2;
+                                                width: 36px * Palette.scale;
+                                                height: 36px * Palette.scale;
+                                                border-radius: 18px * Palette.scale;
+                                                background: (root.currentPreviewIndex <= 0)
+                                                    ? #00000033
+                                                    : (ta-carousel-prev.pressed ? #00000099 : (ta-carousel-prev.has-hover ? #00000077 : #00000055));
+                                                border-width: 1px * Palette.scale;
+                                                border-color: (root.currentPreviewIndex <= 0) ? #ffffff11 : #ffffff33;
+
+                                                ta-carousel-prev := TouchArea {
+                                                    enabled: root.currentPreviewIndex > 0;
+                                                    mouse-cursor: self.enabled ? pointer : default;
+                                                    clicked => { root.currentPreviewIndex -= 1; }
+                                                }
+
+                                                Text {
+                                                    text: "‹";
+                                                    font-size: 24px * Palette.scale;
+                                                    font-weight: 700;
+                                                    color: (root.currentPreviewIndex <= 0) ? #ffffff44 : #ffffff;
+                                                    horizontal-alignment: center;
+                                                    vertical-alignment: center;
+                                                }
+                                            }
+
+                                            // Navigation controls (next)
+                                            if selectedPreviewImageCount > 1 : Rectangle {
+                                                x: parent.width - self.width - 12px * Palette.scale;
+                                                y: (parent.height - self.height) / 2;
+                                                width: 36px * Palette.scale;
+                                                height: 36px * Palette.scale;
+                                                border-radius: 18px * Palette.scale;
+                                                background: (root.currentPreviewIndex >= selectedPreviewImageCount - 1)
+                                                    ? #00000033
+                                                    : (ta-carousel-next.pressed ? #00000099 : (ta-carousel-next.has-hover ? #00000077 : #00000055));
+                                                border-width: 1px * Palette.scale;
+                                                border-color: (root.currentPreviewIndex >= selectedPreviewImageCount - 1) ? #ffffff11 : #ffffff33;
+
+                                                ta-carousel-next := TouchArea {
+                                                    enabled: root.currentPreviewIndex < selectedPreviewImageCount - 1;
+                                                    mouse-cursor: self.enabled ? pointer : default;
+                                                    clicked => { root.currentPreviewIndex += 1; }
+                                                }
+
+                                                Text {
+                                                    text: "›";
+                                                    font-size: 24px * Palette.scale;
+                                                    font-weight: 700;
+                                                    color: (root.currentPreviewIndex >= selectedPreviewImageCount - 1) ? #ffffff44 : #ffffff;
+                                                    horizontal-alignment: center;
+                                                    vertical-alignment: center;
+                                                }
+                                            }
+                                        }
+                                    }
+                                }
+
                                 // Detailed Documentation (Long Description)
-                                if selectedItem.long-description != "" : VerticalLayout {
+                                VerticalLayout {
                                     spacing: 6px * Palette.scale;
 
                                     Text {
@@ -517,11 +851,8 @@ export component StoreWindow inherits Window {
                                         VerticalLayout {
                                             padding: 14px * Palette.scale;
 
-                                            Text {
-                                                text: selectedItem.long-description != "" ? selectedItem.long-description : selectedItem.description;
-                                                font-size: 12px * Palette.scale;
-                                                color: Palette.text-primary;
-                                                wrap: word-wrap;
+                                            StyledText {
+                                                text: selectedItem.long-description;
                                             }
                                         }
                                     }

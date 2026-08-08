@@ -32,7 +32,7 @@
     "type": "THEME",
     "tags": ["theme", "dark", "dracula", "purple"],
     "previewImages": [
-      "https://raw.githubusercontent.com/plexescor/HPR-Store/main/previews/dracula-1.png"
+      "https://raw.githubusercontent.com/dracula/dracula-theme/main/screenshot.png"
     ],
     "supportedHPRVersions": [">=1.0.0"],
     "downloadCount": 3520,
@@ -72,11 +72,125 @@
     "type": "THEME",
     "tags": ["theme", "catppuccin", "mocha", "pastel", "dark"],
     "previewImages": [
-      "https://raw.githubusercontent.com/plexescor/HPR-Store/main/previews/catppuccin-1.png"
+      "https://raw.githubusercontent.com/catppuccin/catppuccin/main/assets/logos/exports/mocha_round.png"
     ],
     "supportedHPRVersions": [">=1.0.0"],
     "downloadCount": 4150,
     "starCount": 310,
     "lastUpdated": "2026-08-07"
+  },
+  {
+    "id": "git-blame-lens",
+    "name": "Git Blame Lens",
+    "author": "git-tools",
+    "authorGithub": "https://github.com/git-tools",
+    "description": "Provides inline Git blame annotations directly within the active HPR workspace file lines.",
+    "longDescription": "### Description\nShows real-time commit metadata inline at the cursor or at the end of lines in HPR. Ideal for debugging and finding authors of complex modules easily.",
+    "version": "",
+    "downloadUrl": "https://github.com/plexescor/HPR-Store/releases/download/v1.0.0/git-blame.zip",
+    "sourceUrl": "https://github.com/plexescor/HPR-Store",
+    "type": "EXTENSION",
+    "tags": ["git", "vcs", "utility", "inline"],
+    "previewImages": [],
+    "supportedHPRVersions": [">=1.0.0"],
+    "downloadCount": 542,
+    "starCount": 0,
+    "lastUpdated": ""
+  },
+  {
+    "id": "solarized-dark-theme",
+    "name": "Solarized Dark Theme",
+    "author": "ethanschoonover",
+    "authorGithub": "https://github.com/altercation",
+    "description": "Precision dark color theme based on the classic Solarized color palette.",
+    "longDescription": "### High-Quality Solarized Theme\n- Exact color coordinates from the Solarized palette.\n- Extremely balanced contrast for both day and night sessions.",
+    "version": "",
+    "downloadUrl": "https://github.com/altercation/solarized/releases/download/v1.0.0/solarized-dark.zip",
+    "sourceUrl": "https://github.com/altercation/solarized",
+    "type": "THEME",
+    "tags": ["theme", "solarized", "dark", "blue-green"],
+    "previewImages": [
+      "https://raw.githubusercontent.com/altercation/solarized/master/img/solarized-palette.png"
+    ],
+    "supportedHPRVersions": [">=1.0.0"],
+    "downloadCount": 1822,
+    "starCount": 0,
+    "lastUpdated": ""
+  },
+  {
+    "id": "todo-task-manager",
+    "name": "Todo Task Manager",
+    "author": "hpr-fans",
+    "authorGithub": "https://github.com/hpr-fans",
+    "description": "Clean personal kanban board and todo manager accessible inside your workspace dashboard.",
+    "longDescription": "### Task Board\n- Kanban columns support.\n- Save progress to workspace local config file.\n- Integrates with HPR timer sessions.",
+    "version": "",
+    "downloadUrl": "https://github.com/hpr-fans/todo-hpr/releases/download/v1.0.1/todo.zip",
+    "sourceUrl": "https://github.com/hpr-fans/todo-hpr",
+    "type": "EXTENSION",
+    "tags": ["productivity", "kanban", "tasks"],
+    "previewImages": [],
+    "supportedHPRVersions": [">=1.0.0"],
+    "downloadCount": 732,
+    "starCount": 0,
+    "lastUpdated": ""
+  },
+  {
+    "id": "gruvbox-retro-theme",
+    "name": "Gruvbox Retro Theme",
+    "author": "morhetz",
+    "authorGithub": "https://github.com/morhetz",
+    "description": "Retro groove theme for HPR styled with the popular Gruvbox warm pastel colors.",
+    "longDescription": "### Warm Retro Looks\n- Pastel, low-contrast, eyes-comforting colors.\n- Custom styling matching retro terminal designs.",
+    "version": "",
+    "downloadUrl": "https://github.com/morhetz/gruvbox/releases/download/v1.1.0/gruvbox.zip",
+    "sourceUrl": "https://github.com/morhetz/gruvbox",
+    "type": "THEME",
+    "tags": ["theme", "retro", "gruvbox", "warm"],
+    "previewImages": [
+      "https://raw.githubusercontent.com/morhetz/gruvbox-contrib/master/screenshot.png"
+    ],
+    "supportedHPRVersions": [">=1.0.0"],
+    "downloadCount": 2981,
+    "starCount": 0,
+    "lastUpdated": ""
+  },
+  {
+    "id": "nordic-chill-theme",
+    "name": "Nordic Chill Theme",
+    "author": "arcticicestudio",
+    "authorGithub": "https://github.com/arcticicestudio",
+    "description": "Clean, dusty, arctic theme for a quiet workspace vibe.",
+    "longDescription": "### Arctic Vibe\n- Distinct blue-gray ice-cold styling.\n- Designed specifically for clean minimalistic interfaces.",
+    "version": "",
+    "downloadUrl": "https://github.com/arcticicestudio/nord/releases/download/v0.8.0/nordic.zip",
+    "sourceUrl": "https://github.com/arcticicestudio/nord",
+    "type": "THEME",
+    "tags": ["theme", "nordic", "nord", "clean", "cold"],
+    "previewImages": [
+      "https://raw.githubusercontent.com/arcticicestudio/nord/develop/assets/nord-preview-banner.png"
+    ],
+    "supportedHPRVersions": [">=1.0.0"],
+    "downloadCount": 3812,
+    "starCount": 0,
+    "lastUpdated": ""
+  },
+  {
+    "id": "wakatime-tracker",
+    "name": "WakaTime Analytics Tracker",
+    "author": "wakatime-dev",
+    "authorGithub": "https://github.com/wakatime",
+    "description": "Log editing metrics and track programming language metrics automatically via WakaTime API.",
+    "longDescription": "### Setup\n- Enter WakaTime API key in preferences.\n- Tracks file time metrics, project targets and logs stats.",
+    "version": "",
+    "downloadUrl": "https://github.com/wakatime/hpr-wakatime/releases/download/v1.0.2/wakatime.zip",
+    "sourceUrl": "https://github.com/wakatime/hpr-wakatime",
+    "type": "EXTENSION",
+    "tags": ["analytics", "metrics", "wakatime"],
+    "previewImages": [],
+    "supportedHPRVersions": [">=1.0.0"],
+    "downloadCount": 1690,
+    "starCount": 0,
+    "lastUpdated": ""
   }
 ]
