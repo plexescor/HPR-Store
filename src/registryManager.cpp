@@ -46,27 +46,38 @@ inline void from_json(const nlohmann::json& j, StoreItem& item) {
 RegistryManager::RegistryManager() = default;
 RegistryManager::~RegistryManager() = default;
 
+std::optional<StoreItem> RegistryManager::getItemById(const std::string& id) const
+{
+    for (const auto& item : allItems)
+    {
+        if (item.id == id)
+            return item;
+    }
+    // Fallback: also check items (current page)
+    for (const auto& item : items)
+    {
+        if (item.id == id)
+            return item;
+    }
+    return std::nullopt;
+}
+
 std::filesystem::path RegistryManager::getLocalRegistryPath() const
 {
+    void (*pFromJson)(const nlohmann::json&, StoreItem&) = &from_json;
 #ifndef _WIN32
-    union {
-        std::filesystem::path (RegistryManager::*memberFn)() const;
-        void* rawPtr;
-    } castUnion;
-    castUnion.memberFn = &RegistryManager::getLocalRegistryPath;
-
     Dl_info info;
-    if (dladdr(castUnion.rawPtr, &info) && info.dli_fname)
+    if (dladdr((const void*)pFromJson, &info) && info.dli_fname)
     {
         auto path = std::filesystem::path(info.dli_fname).parent_path() / "registry.json";
         if (std::filesystem::exists(path)) return path;
     }
 #else
     union {
-        std::filesystem::path (RegistryManager::*memberFn)() const;
+        void (*funcPtr)(const nlohmann::json&, StoreItem&);
         LPCWSTR rawPtr;
     } castUnion;
-    castUnion.memberFn = &RegistryManager::getLocalRegistryPath;
+    castUnion.funcPtr = pFromJson;
 
     wchar_t path[MAX_PATH];
     HMODULE hm = NULL;
@@ -130,11 +141,11 @@ void RegistryManager::readLocalRegistry()
 void RegistryManager::updateDatabase()
 {
     ix::HttpClient httpClient;
-    std::string fullUrl = "https://" + std::string(REGISTRY_URL) + std::string(REGISTRY_PATH);
+    // Use raw.githubusercontent.com to bypass API 403 rate limits and fetch the raw file directly
+    std::string fullUrl = "https://raw.githubusercontent.com/plexescor/HPR-Store/main/registry.json";
 
     auto args = httpClient.createRequest();
     args->extraHeaders["User-Agent"] = "HPR";
-    args->extraHeaders["Accept"] = "application/vnd.github.v3.raw";
 
     std::cout << "[RegistryManager] Fetching remote update from: " << fullUrl << std::endl;
     auto response = httpClient.get(fullUrl, args);

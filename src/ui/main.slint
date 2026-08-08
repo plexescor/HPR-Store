@@ -144,6 +144,15 @@ export component StoreWindow inherits Window {
     // Type filter: 0=BOTH, 1=EXTENSION, 2=THEME
     in property <int> activeTypeFilter: 0;
 
+    // Loading overlay for database updating
+    in property <bool> databaseUpdating: false;
+
+    // Install state
+    in property <bool> installing: false;
+    in-out property <bool> installResultVisible: false;
+    in property <bool> installSuccess: false;
+    in property <string> installErrorMessage: "";
+
     // Page jump state (private to UI)
     property <string> pageJumpText: "";
     property <bool> pageJumpInvalid: false;
@@ -1004,6 +1013,161 @@ export component StoreWindow inherits Window {
                                         }
                                     }
                                 }
+                            }
+                        }
+                    }
+                }
+            }
+        }
+
+        // Loading overlay for updating the database (declared last to render on top)
+        if databaseUpdating : Rectangle {
+            background: #090d16cc;
+
+            TouchArea {
+                // block all interactions while updating
+            }
+
+            VerticalLayout {
+                alignment: center;
+                spacing: 16px * Palette.scale;
+
+                // Loading Circle Spinner
+                Rectangle {
+                    width: 36px * Palette.scale;
+                    height: 36px * Palette.scale;
+                    border-radius: 18px * Palette.scale;
+                    border-width: 3px * Palette.scale;
+                    border-color: #38bdf8;
+                    x: (parent.width - self.width) / 2;
+                }
+
+                Text {
+                    text: "UPDATING DATABASE...";
+                    font-size: 11px * Palette.scale;
+                    font-weight: 800;
+                    letter-spacing: 2px * Palette.scale;
+                    color: #38bdf8;
+                    horizontal-alignment: center;
+                }
+            }
+        }
+
+        // Install loading overlay
+        if installing : Rectangle {
+            background: #090d16cc;
+
+            TouchArea {
+                // block all interactions while installing
+            }
+
+            VerticalLayout {
+                alignment: center;
+                spacing: 16px * Palette.scale;
+
+                Rectangle {
+                    width: 36px * Palette.scale;
+                    height: 36px * Palette.scale;
+                    border-radius: 18px * Palette.scale;
+                    border-width: 3px * Palette.scale;
+                    border-color: #a78bfa;
+                    x: (parent.width - self.width) / 2;
+                }
+
+                Text {
+                    text: "INSTALLING...";
+                    font-size: 11px * Palette.scale;
+                    font-weight: 800;
+                    letter-spacing: 2px * Palette.scale;
+                    color: #a78bfa;
+                    horizontal-alignment: center;
+                }
+            }
+        }
+
+        // Install result dialog
+        if installResultVisible : Rectangle {
+            background: #000000cc;
+
+            TouchArea {
+                // block click-through
+            }
+
+            Rectangle {
+                width: 440px * Palette.scale;
+                height: 240px * Palette.scale;
+                x: (parent.width - self.width) / 2;
+                y: (parent.height - self.height) / 2;
+                background: Palette.card-background;
+                border-radius: 12px * Palette.scale;
+                border-width: 1px * Palette.scale;
+                border-color: Palette.card-border;
+
+                VerticalLayout {
+                    padding: 28px * Palette.scale;
+                    spacing: 14px * Palette.scale;
+                    alignment: space-between;
+
+                    VerticalLayout {
+                        spacing: 6px * Palette.scale;
+
+                        Text {
+                            text: installSuccess ? "SUCCESS" : "FAILED";
+                            font-size: 9px * Palette.scale;
+                            font-weight: 800;
+                            letter-spacing: 2.5px * Palette.scale;
+                            color: installSuccess ? #10b981 : #ef4444;
+                            horizontal-alignment: center;
+                        }
+
+                        Text {
+                            text: installSuccess ? "Installed Successfully" : "Installation Failed";
+                            font-size: 18px * Palette.scale;
+                            font-weight: 800;
+                            color: Palette.text-primary;
+                            horizontal-alignment: center;
+                        }
+                    }
+
+                    Text {
+                        text: installSuccess
+                            ? "The item has been installed. Restart HPR to apply changes."
+                            : installErrorMessage;
+                        font-size: 11px * Palette.scale;
+                        font-weight: 500;
+                        color: Palette.text-secondary;
+                        wrap: word-wrap;
+                        horizontal-alignment: center;
+                    }
+
+                    HorizontalLayout {
+                        alignment: center;
+
+                        ok-btn := Rectangle {
+                            width: 130px * Palette.scale;
+                            height: 32px * Palette.scale;
+                            border-radius: 6px * Palette.scale;
+                            background: ok-ta.pressed
+                                ? @linear-gradient(135deg, #0284c7 0%, #0369a1 100%)
+                                : ok-ta.has-hover
+                                    ? @linear-gradient(135deg, #7dd3fc 0%, #38bdf8 100%)
+                                    : @linear-gradient(135deg, #38bdf8 0%, #0284c7 100%);
+
+                            ok-ta := TouchArea {
+                                mouse-cursor: pointer;
+                                clicked => {
+                                    root.installResultVisible = false;
+                                }
+                            }
+
+                            Text {
+                                text: "OK";
+                                font-size: 9px * Palette.scale;
+                                font-weight: 800;
+                                letter-spacing: 1.5px * Palette.scale;
+                                color: #ffffff;
+                                horizontal-alignment: center;
+                                vertical-alignment: center;
                             }
                         }
                     }

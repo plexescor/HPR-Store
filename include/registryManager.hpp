@@ -4,6 +4,7 @@
 #include <vector>
 #include <unordered_set>
 #include <filesystem>
+#include <optional>
 
 enum class SortMode { NONE, STARS_DESC, DOWNLOADS_DESC };
 
@@ -25,6 +26,9 @@ class RegistryManager
         void sortItems(SortMode mode);
         std::vector<StoreItem> getPage(int page) const;
         void rebuildPageOrder();
+
+        // Lookup a single item by id across allItems
+        std::optional<StoreItem> getItemById(const std::string& id) const;
 
     public:
         std::vector<StoreItem> items;        // Current page or sort window

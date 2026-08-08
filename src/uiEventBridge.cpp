@@ -1,4 +1,5 @@
 #include "uiEventBridge.hpp"
+#include "installer.hpp"
 #include <slint/slint.h>
 #include <iostream>
 #include <vector>
@@ -182,6 +183,7 @@ void UIEventBridge::setupEvents()
     ui->on_refresh_clicked([this]()
     {
         std::cout << "[UIEventBridge] Update Database clicked. Fetching remote updates..." << std::endl;
+        ui->set_databaseUpdating(true);
         std::thread([this]()
         {
             registryManager->updateDatabase();
@@ -189,6 +191,7 @@ void UIEventBridge::setupEvents()
             slint::invoke_from_event_loop([this]()
             {
                 updateStoreItemsUI();
+                ui->set_databaseUpdating(false);
             });
         }).detach();
     });
@@ -352,8 +355,32 @@ void UIEventBridge::setupEvents()
         }).detach();
     });
 
-    ui->on_install_item_clicked([](slint::SharedString itemId)
+    ui->on_install_item_clicked([this](slint::SharedString itemId)
     {
+        if (!registryManager) return;
+
+        auto maybeItem = registryManager->getItemById(std::string(itemId));
+        if (!maybeItem)
+        {
+            std::cerr << "[UIEventBridge] Install: item not found: " << itemId.data() << std::endl;
+            return;
+        }
+
         std::cout << "[UIEventBridge] Install requested for: " << itemId.data() << std::endl;
+        ui->set_installing(true);
+        ui->set_installResultVisible(false);
+
+        std::thread([this, item = *maybeItem]()
+        {
+            InstallResult result = Installer::install(item);
+
+            slint::invoke_from_event_loop([this, result]()
+            {
+                ui->set_installing(false);
+                ui->set_installSuccess(result.success);
+                ui->set_installErrorMessage(slint::SharedString(result.errorMessage));
+                ui->set_installResultVisible(true);
+            });
+        }).detach();
     });
 }

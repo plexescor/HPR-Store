@@ -40,6 +40,25 @@ set(USE_TLS ON CACHE BOOL "" FORCE)
 
 FetchContent_MakeAvailable(ixwebsocket nlohmann_json)
 
+# libarchive: try system first, fall back to FetchContent
+find_package(LibArchive QUIET)
+if(NOT LibArchive_FOUND)
+    message(STATUS "libarchive not found via find_package, fetching from source...")
+    set(ENABLE_TEST OFF CACHE BOOL "" FORCE)
+    set(ENABLE_TAR OFF CACHE BOOL "" FORCE)
+    set(ENABLE_CPIO OFF CACHE BOOL "" FORCE)
+    set(ENABLE_CAT OFF CACHE BOOL "" FORCE)
+    FetchContent_Declare(
+        libarchive_src
+        GIT_REPOSITORY https://github.com/libarchive/libarchive.git
+        GIT_TAG        v3.7.4
+    )
+    FetchContent_MakeAvailable(libarchive_src)
+    if(NOT TARGET LibArchive::LibArchive)
+        add_library(LibArchive::LibArchive ALIAS archive_static)
+    endif()
+endif()
+
 
 file(GLOB_RECURSE SOURCES "src/*.cpp")
 
@@ -80,6 +99,7 @@ target_include_directories(HPR-Store PRIVATE external/sol2/)
 target_link_libraries(HPR-Store PRIVATE
     lua_static
     nlohmann_json::nlohmann_json
+    LibArchive::LibArchive
 )
 
 target_include_directories(HPR-Store

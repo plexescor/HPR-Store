@@ -1,31 +1,28 @@
 [
   {
-    "id": "spotify-integration",
-    "name": "Spotify Integration",
+    "id": "hpr-idle-detection",
+    "name": "Idle Detection Extension",
     "author": "plexescor",
     "authorGithub": "https://github.com/plexescor",
-    "description": "Displays currently playing Spotify track in HPR topbar and logs listening history.",
-    "longDescription": "### Features\n- Real-time **Spotify playback status** integration.\n- Logs listening history directly into HPR analytics timeline.\n- Automatic album art and track metadata fetching.",
-    "version": "1.0.0",
-    "downloadUrl": "https://github.com/plexescor/spotify-hpr/releases/download/v1.0.0/spotify-hpr.zip",
-    "sourceUrl": "https://github.com/plexescor/spotify-hpr",
+    "description": "Monitors system idle status and automatically pauses/resumes HPR tracking when the user goes idle.",
+    "longDescription": "### HPR Idle Detection Extension\n\nA native **C++ & Lua** extension for HPR that monitors system idle status and automatically manages tracking lifecycle events.\n\n### Features\n- **Auto Pause & Resume** — Tracking stops when idle time exceeds the configured threshold and resumes when activity returns.\n- **Configurable Threshold** — Set idle timeout via `idle_detection_config.csv` (default: 8 minutes).\n- **Cross-Platform** — Supports Windows, Linux (GNOME, Hyprland, niri) and any Wayland compositor implementing `ext-idle-notify-v1`.\n\n### Platform Support\n- **Windows** — Uses `GetLastInputInfo` (Win32 API)\n- **Linux (GNOME)** — Uses `org.gnome.Mutter.IdleMonitor` D-Bus\n- **Linux (Wayland)** — Uses `ext-idle-notify-v1` protocol (KDE, Hyprland, Sway, niri, etc.)\n\n> **Note:** X11 sessions are not supported.",
+    "version": "0.1",
+    "downloadUrl": "https://github.com/plexescor/HPR-Idle-Detection-Extension/releases/download/v0.1/HPR-Idle-Detection-Extension.zip",
+    "sourceUrl": "https://github.com/plexescor/HPR-Idle-Detection-Extension",
     "type": "EXTENSION",
     "tags": [
-      "music",
-      "integration",
-      "media",
-      "spotify"
+      "idle",
+      "tracking",
+      "automation",
+      "system",
+      "native"
     ],
-    "previewImages": [
-      "https://raw.githubusercontent.com/plexescor/HPR-Store/main/previews/spotify-1.png"
-    ],
+    "previewImages": [],
     "supportedHPRVersions": [
-      "1.0.0",
-      "1.0.1",
-      "1.1.0"
+      "0.9.7"
     ],
-    "downloadCount": 1240,
-    "starCount": 85,
-    "lastUpdated": "2026-08-01"
+    "downloadCount": 0,
+    "starCount": 0,
+    "lastUpdated": "2026-08-08"
   }
 ]
