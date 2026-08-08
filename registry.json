@@ -1,1 +1,78 @@
-
+[
+  {
+    "id": "spotify-integration",
+    "name": "Spotify Integration",
+    "author": "plexescor",
+    "authorGithub": "https://github.com/plexescor",
+    "description": "Displays currently playing Spotify track in HPR topbar and logs listening history.",
+    "version": "1.0.0",
+    "downloadUrl": "https://github.com/plexescor/spotify-hpr/releases/download/v1.0.0/spotify-hpr.zip",
+    "sourceUrl": "https://github.com/plexescor/spotify-hpr",
+    "type": "EXTENSION",
+    "tags": ["music", "integration", "media", "spotify"],
+    "previewImages": [
+      "https://raw.githubusercontent.com/plexescor/HPR-Store/main/previews/spotify-1.png"
+    ],
+    "supportedHPRVersions": [">=1.0.0"],
+    "downloadCount": 1240,
+    "starCount": 85,
+    "lastUpdated": "2026-08-01"
+  },
+  {
+    "id": "dracula-theme",
+    "name": "Dracula Theme",
+    "author": "dracula",
+    "authorGithub": "https://github.com/dracula",
+    "description": "Official dark theme for HPR inspired by the famous Dracula color scheme.",
+    "version": "1.2.0",
+    "downloadUrl": "https://github.com/dracula/hpr-theme/releases/download/v1.2.0/dracula.zip",
+    "sourceUrl": "https://github.com/dracula/hpr-theme",
+    "type": "THEME",
+    "tags": ["theme", "dark", "dracula", "purple"],
+    "previewImages": [
+      "https://raw.githubusercontent.com/plexescor/HPR-Store/main/previews/dracula-1.png"
+    ],
+    "supportedHPRVersions": [">=1.0.0"],
+    "downloadCount": 3520,
+    "starCount": 240,
+    "lastUpdated": "2026-07-20"
+  },
+  {
+    "id": "pomodoro-timer",
+    "name": "Pomodoro Timer & Tracker",
+    "author": "dev-community",
+    "authorGithub": "https://github.com/dev-community",
+    "description": "Integrated Pomodoro timer synchronized with HPR focus session analytics.",
+    "version": "0.9.5",
+    "downloadUrl": "https://github.com/dev-community/hpr-pomodoro/releases/download/v0.9.5/pomodoro.zip",
+    "sourceUrl": "https://github.com/dev-community/hpr-pomodoro",
+    "type": "EXTENSION",
+    "tags": ["productivity", "timer", "pomodoro", "focus"],
+    "previewImages": [
+      "https://raw.githubusercontent.com/plexescor/HPR-Store/main/previews/pomodoro-1.png"
+    ],
+    "supportedHPRVersions": [">=1.0.0"],
+    "downloadCount": 890,
+    "starCount": 42,
+    "lastUpdated": "2026-08-05"
+  },
+  {
+    "id": "catppuccin-mocha-theme",
+    "name": "Catppuccin Mocha Theme",
+    "author": "catppuccin",
+    "authorGithub": "https://github.com/catppuccin",
+    "description": "Soothing pastel theme for HPR featuring Catppuccin Mocha palette.",
+    "version": "2.0.1",
+    "downloadUrl": "https://github.com/catppuccin/hpr/releases/download/v2.0.1/catppuccin-mocha.zip",
+    "sourceUrl": "https://github.com/catppuccin/hpr",
+    "type": "THEME",
+    "tags": ["theme", "catppuccin", "mocha", "pastel", "dark"],
+    "previewImages": [
+      "https://raw.githubusercontent.com/plexescor/HPR-Store/main/previews/catppuccin-1.png"
+    ],
+    "supportedHPRVersions": [">=1.0.0"],
+    "downloadCount": 4150,
+    "starCount": 310,
+    "lastUpdated": "2026-08-07"
+  }
+]

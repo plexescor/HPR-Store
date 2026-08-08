@@ -1,11 +1,110 @@
-import { AboutSlint, VerticalBox } from "std-widgets.slint";
+import { Palette } from "./palette.slint";
 
-export component StoreWindow inherits Window 
-{
-    VerticalBox {
-        Text 
-        {
-            text: "Hello World!";
+component RefreshButton inherits Rectangle {
+    in property <string> label: "REFRESH";
+    in property <bool> primary: true;
+    callback clicked;
+
+    property <color> primary-accent: #38bdf8;
+
+    width: button-label.preferred-width + 22px * Palette.scale;
+    height: 30px * Palette.scale;
+    border-radius: 7px * Palette.scale;
+    border-width: 1px * Palette.scale;
+    border-color: primary ? primary-accent.mix(#00000000, 0.30) : Palette.input-border;
+    background: primary
+        ? (button-area.pressed
+            ? primary-accent.mix(#00000000, 0.22)
+            : (button-area.has-hover
+                ? primary-accent.mix(#00000000, 0.16)
+                : primary-accent.mix(#00000000, 0.09)))
+        : (button-area.pressed ? Palette.input-bg-press : (button-area.has-hover ? Palette.input-bg-hover : Palette.input-bg));
+
+    animate background { duration: 100ms; }
+    animate border-color { duration: 100ms; }
+
+    button-label := Text {
+        text: root.label;
+        color: root.primary ? root.primary-accent : Palette.text-secondary;
+        font-size: 10.5px * Palette.scale;
+        font-weight: 700;
+        letter-spacing: 1px * Palette.scale;
+        horizontal-alignment: center;
+        vertical-alignment: center;
+    }
+
+    button-area := TouchArea {
+        mouse-cursor: pointer;
+        clicked => { root.clicked(); }
+    }
+}
+
+export component StoreWindow inherits Window {
+    title: "HPR Store";
+    background: Palette.background;
+    default-font-size: 13px * Palette.scale;
+    preferred-width: 780px * Palette.scale;
+    preferred-height: 626px * Palette.scale;
+
+    callback refresh-clicked();
+
+    Rectangle {
+        width: 100%;
+        height: 100%;
+        background: Palette.background;
+
+        VerticalLayout {
+            padding: 0px;
+            spacing: 0px;
+
+            // ── Topbar ───────────────────────────────────────────────────
+            topbar := Rectangle {
+                height: 46px * Palette.scale;
+                background: Palette.background;
+
+                Rectangle {
+                    y: parent.height - 1px * Palette.scale;
+                    height: 1px * Palette.scale;
+                    background: @linear-gradient(90deg, transparent 0%, Palette.divider 40%, Palette.divider 60%, transparent 100%);
+                }
+
+                HorizontalLayout {
+                    padding-left: 18px * Palette.scale;
+                    padding-right: 18px * Palette.scale;
+                    alignment: space-between;
+
+                    HorizontalLayout {
+                        spacing: 10px * Palette.scale;
+                        alignment: start;
+
+                        Text {
+                            text: "HPR STORE";
+                            color: Palette.text-primary;
+                            font-size: 12px * Palette.scale;
+                            font-weight: 700;
+                            letter-spacing: 4px * Palette.scale;
+                            vertical-alignment: center;
+                        }
+                    }
+
+                    HorizontalLayout {
+                        spacing: 10px * Palette.scale;
+                        alignment: end;
+
+                        RefreshButton {
+                            label: "REFRESH";
+                            primary: true;
+                            y: (parent.height - self.height) / 2;
+                            clicked => { root.refresh-clicked(); }
+                        }
+                    }
+                }
+            }
+
+            // ── Main View Area ──────────────────────────────────────────
+            main-view := Rectangle {
+                vertical-stretch: 1;
+            }
         }
     }
 }

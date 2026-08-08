@@ -1,21 +1,17 @@
 #pragma once
 #include "main.h"
 #include "registryManager.hpp"
-#include "uiEventBridge.hpp"
 #include <memory>
 
-class GUI
+class UIEventBridge
 {
     public:
-        GUI();
-        ~GUI();
+        UIEventBridge(slint::ComponentHandle<StoreWindow> uiHandle, std::shared_ptr<RegistryManager> regManager);
+        ~UIEventBridge();
 
-    public:
-        void show();
-        void hide();
+        void setupEvents();
 
     private:
         slint::ComponentHandle<StoreWindow> ui;
         std::shared_ptr<RegistryManager> registryManager;
-        std::unique_ptr<UIEventBridge> eventBridge;
 };

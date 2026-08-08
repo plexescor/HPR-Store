@@ -2,15 +2,15 @@
 #include "main.h"
 #include <slint/slint.h>
 
-GUI::GUI() : ui(StoreWindow::create())
+GUI::GUI() 
+    : ui(StoreWindow::create()),
+      registryManager(std::make_shared<RegistryManager>()),
+      eventBridge(std::make_unique<UIEventBridge>(ui, registryManager))
 {
-
+    eventBridge->setupEvents();
 }
 
-GUI::~GUI()
-{
-
-}
+GUI::~GUI() = default;
 
 void GUI::show()
 {
