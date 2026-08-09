@@ -135,9 +135,6 @@ cmake .. -DCMAKE_BUILD_TYPE=Release ^
 cmake --build . --config Release
 ```
 
-> [!NOTE]
-> You do **not** need to ship Slint's DLL/SO alongside HPR-Store. Since it is loaded into the already-running HPR process, the Slint shared library that HPR itself uses is already mapped into process memory and available to the extension.
-
 ---
 
 ## 🧩 Technical Architecture
