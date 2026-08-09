@@ -38,70 +38,86 @@ No building required if you grab a pre-built release.
 
 ---
 
-## Technical Overview
+## 🔄 Self-Update
 
-### 1. The Lua Entrypoint (`src/HPR-Store.lua`)
-- Registers metadata with HPR (`HPR.extensionName = "HPR Store"`, `HPR.authorName = "Plexescor"`, and `versionSupport`).
-- Resolves the absolute directory of the extension at runtime and loads the native library (`libHPR-Store.so` or `libHPR-Store.dll`) using `package.loadlib`.
-- Binds HPR lifecycle callbacks (`init`, `onTick`, `onExit`, `onAction`) to the loaded native library symbols (`initialize`, `destroy`, `showUi`).
-- When the extension action is triggered in HPR, it calls `showUi()` to display the store interface.
+HPR-Store maintains its own release cycle independent of HPR.
 
-### 2. The Native Library (`src/library.cpp`)
-- Exposes three `extern "C"` functions expected by the Lua script:
-  - `initialize(lua_State* L)`: Instantiates the global `GUI` object on the Slint event loop thread.
-  - `destroy(lua_State* L)`: Hides and resets the `GUI` object safely on the Slint thread.
-  - `showUi(lua_State* L)`: Shows the Slint window on the screen.
+When the registry reports a newer version of HPR-Store, an **Update HPR-Store** button appears in the top-left of the store window's title bar. Clicking it:
 
-### 3. The UI Controller (`src/GUI.cpp`)
-- Manages the main `StoreWindow` Slint interface instance, the `RegistryManager` backend, and the `UIEventBridge` that hooks up C++ event logic to UI callbacks.
+1. Downloads the new release zip to a temp directory.
+2. Renames the currently loaded library to `.old` (avoiding OS file locks on Windows, avoiding in-place overwrite crashes on Linux).
+3. Copies the new binary and Lua files into the extension folder.
+4. Calls `HPR.reloadMyself()` — HPR hot-reloads the store extension with the new binary, completely without restarting.
 
-### 4. Registry and Local Database (`src/registryManager.cpp`)
-- Loads local registry entries from `registry.json` stored in HPR's extension directory.
-- Fetches remote updates directly from the GitHub repository database using `ixwebsocket`'s HTTP client.
-- Filters and pages the store item catalog based on chosen type (Extensions, Themes, or Both) and installation status.
-- Implements sorting modes (Star count, Download count, and Default shuffle).
-
-### 5. Installer Engine (`src/installer.cpp`)
-- Handles downloading binary release zip archives asynchronously via `ix::HttpClient`.
-- Extracts archives dynamically to a temporary directory using **libarchive**.
-- Performs root folder identification inside the archive:
-  - **Themes**: Looks for a directory containing both `metadata.csv` and `app-window.slint`.
-  - **Extensions**: Looks for the directory containing the first `.lua` entry.
-- Normalizes root folder names if the extracted top-level folder name is `"extracted"`:
-  - Theme folders are named after the name field value inside `metadata.csv` (lowercased and sanitized).
-  - Extension folders are named after the stem of their `.lua` file (e.g. `extension` from `extension.lua`).
-- Copies the identified folder to HPR's configuration directories (`~/.config/HPR/` on Linux / `%APPDATA%/HPR/HPR_Config/` on Windows).
-- Automatically writes a record of installed items in `HPR-Store`'s local config folder (`~/.config/HPR-Store/installed.json` or Windows equivalent) to keep track of installed status.
-- Handles clean uninstallation by recursively deleting the corresponding theme or extension folder from HPR and removing it from the database.
+Leftover `.old` files from a previous update are cleaned up automatically on next launch.
 
 ---
 
-## Dependencies
+## 📦 Publishing an Extension or Theme
 
-### Linux
+Want your extension listed in HPR-Store? Submit a PR!
+
+1. Create a GitHub release with a `.zip` file containing your extension or theme folder.
+2. Fork this repository, add your entry to `registry.json`, and open a Pull Request.
+3. Once merged, all HPR-Store users will see your extension on their next database refresh.
+
+### `registry.json` Entry Schema
+
+| Field | Type | Required | Description |
+|-------|------|----------|-------------|
+| `id` | string | ✅ | Unique kebab-case identifier (e.g. `"my-extension"`) |
+| `name` | string | ✅ | Display name shown in the store |
+| `author` | string | ✅ | Your name or GitHub username |
+| `authorGithub` | string | — | Link to your GitHub profile |
+| `description` | string | ✅ | Short one-line description |
+| `longDescription` | string | — | Full Markdown description shown in the detail view |
+| `version` | string | ✅ | Current version string (e.g. `"0.2"`) |
+| `downloadUrl` | string | ✅ | Direct URL to the release `.zip` archive |
+| `sourceUrl` | string | — | URL to the source code repository |
+| `type` | string | ✅ | `"EXTENSION"` or `"THEME"` |
+| `tags` | array | — | Searchable tag strings |
+| `supportedHPRVersions` | array | — | List of compatible HPR version strings |
+| `previewImages` | array | — | URLs to preview images shown in the UI carousel |
+| `downloadCount` | int | — | Download counter (maintained by the registry) |
+| `starCount` | int | — | Star counter (used for sort-by-stars) |
+| `lastUpdated` | string | — | ISO date of last update (e.g. `"2026-08-09"`) |
+
+---
+
+## 🛠 Building from Source
+
+### Dependencies (Linux)
 - **Slint Compiler & Library**
 - **libarchive** (extracts `.zip` and `.tar` archives)
-- **ixwebsocket** (performs HTTP database fetches and package downloads)
-- **nlohmann_json** (parses databases and registry JSON files)
+- **ixwebsocket** (performs HTTP fetches and package downloads)
+- **nlohmann_json** (parses registry JSON files)
 - **openssl** / **zlib**
 
-Install system dependencies:
 ```bash
-# Ubuntu / Debian
+# Install system dependencies (Ubuntu / Debian)
 sudo apt install build-essential cmake libarchive-dev libssl-dev zlib1g-dev
 
 # Arch Linux
 sudo pacman -S base-devel cmake libarchive openssl zlib
 ```
 
-### Windows
+```bash
+# Build
+mkdir build && cd build
+cmake .. -DCMAKE_BUILD_TYPE=Release
+cmake --build . --config Release
+```
+
+The post-build step automatically copies the compiled library, `HPR-Store.lua`, and `registry.json` to HPR's active extensions directory.
+
+### Dependencies (Windows)
 - **Visual Studio 2022** / MSVC C++ Desktop Development tools
 - **CMake** (version >= 3.21)
-- **vcpkg** (for OpenSSL static linking)
-- libarchive (fetched automatically via FetchContent)
+- **vcpkg** (for OpenSSL and zlib static linking)
+- libarchive is fetched automatically via CMake FetchContent
 
-#### Setting up vcpkg + OpenSSL + zlib (one-time)
 ```bash
+# Setup vcpkg (one-time)
 cd C:\
 git clone https://github.com/microsoft/vcpkg.git
 cd vcpkg
@@ -109,52 +125,34 @@ bootstrap-vcpkg.bat
 vcpkg install openssl:x64-windows-static zlib:x64-windows-static
 ```
 
-#### Build Instructions (Windows)
 ```bash
-mkdir build
-cd build
-cmake .. -DCMAKE_BUILD_TYPE=Debug -DCMAKE_TOOLCHAIN_FILE=C:/vcpkg/scripts/buildsystems/vcpkg.cmake -DVCPKG_TARGET_TRIPLET=x64-windows-static -DCMAKE_PREFIX_PATH="C:/Program Files/Slint-cpp 1.16.1"
+# Build
+mkdir build && cd build
+cmake .. -DCMAKE_BUILD_TYPE=Release ^
+  -DCMAKE_TOOLCHAIN_FILE=C:/vcpkg/scripts/buildsystems/vcpkg.cmake ^
+  -DVCPKG_TARGET_TRIPLET=x64-windows-static ^
+  -DCMAKE_PREFIX_PATH="C:/Program Files/Slint-cpp 1.16.1"
 cmake --build . --config Release
 ```
-
----
-
-## Build Instructions
-
-To build the HPR-Store library shared object:
 
 > [!NOTE]
-> **Windows users:** Use the build commands from the [Windows Build Instructions](#build-instructions-windows) section above instead of the generic `cmake ..` line. The toolchain file and static triplet flags are required for OpenSSL + zlib to link statically into the DLL.
-
-```bash
-# 1. Create and enter build folder
-mkdir build
-cd build
-
-# 2. Configure project
-cmake .. -DCMAKE_BUILD_TYPE=Release
-
-# 3. Compile
-cmake --build . --config Release
-```
-
-The post-build step in CMake will automatically:
-1. Copy the compiled shared library (`libHPR-Store.so` or `HPR-Store.dll`) to HPR's active extensions directory (`~/.config/HPR/extensions/HPR-Store/` or `%APPDATA%/HPR/HPR_Config/extensions/HPR-Store/`).
-2. Copy `HPR-Store.lua` and `registry.json` next to the shared library.
+> You do **not** need to ship Slint's DLL/SO alongside HPR-Store. Since it is loaded into the already-running HPR process, the Slint shared library that HPR itself uses is already mapped into process memory and available to the extension.
 
 ---
 
-## Installation in HPR
+## 🧩 Technical Architecture
 
-HPR automatically scans its config directories for dynamic extensions on startup.
+### Lua Entrypoint (`src/HPR-Store.lua`)
+Registers HPR metadata and binds lifecycle callbacks (`init`, `onTick`, `onExit`, `onAction`) to native library symbols loaded via `package.loadlib`.
 
-To manually install the store into HPR:
-1. Locate the config extension folder:
-   - **Linux:** `~/.config/HPR/extensions/`
-   - **Windows:** `%APPDATA%/HPR/HPR_Config/extensions/`
-2. Create a folder named `HPR-Store/`.
-3. Place the following three files inside the `HPR-Store/` directory:
-   - `HPR-Store.lua` (the Lua script)
-   - `registry.json` (the local database seed)
-   - `libHPR-Store.so` (on Linux) / `HPR-Store.dll` (on Windows)
-4. Start HPR. The extension will initialize and can be opened from HPR's Action Bar.
+### Native Library (`src/library.cpp`)
+Exposes `initialize`, `destroy`, and `showUi` as `extern "C"` symbols. Holds the global `lua_State*` pointer used to bridge C++ back into Lua for lifecycle calls (`HPR.unloadExtension`, `HPR.reloadMyself`, `HPR.refreshExtensions`).
+
+### UI Controller (`src/GUI.cpp`)
+Owns the `StoreWindow` Slint instance and wires it to `UIEventBridge`, which maps all user interactions to C++ installer and registry logic.
+
+### Registry & Installer (`src/registryManager.cpp`, `src/installer.cpp`)
+- Downloads remote `registry.json` from GitHub via `ixwebsocket`.
+- Downloads and extracts `.zip` release archives via `libarchive`.
+- Before any file modification, synchronously unloads the target extension via `HPR.unloadExtension` through the live Lua state.
+- For self-updates: uses `dladdr` (Linux) and `GetModuleFileNameW` (Windows) to resolve the exact loaded library path, then performs rename-staging before overwriting.
