@@ -5,6 +5,7 @@
 #include <unordered_set>
 #include <filesystem>
 #include <optional>
+#include <mutex>
 
 enum class SortMode { NONE, STARS_DESC, DOWNLOADS_DESC };
 
@@ -42,6 +43,7 @@ class RegistryManager
         static constexpr int PAGE_SIZE = 100;
 
     private:
+        mutable std::mutex registryMutex;
         static constexpr std::string_view REGISTRY_URL =
             "api.github.com";
         static constexpr std::string_view REGISTRY_PATH =

@@ -14,11 +14,13 @@
 
 static std::unique_ptr<GUI> gui;
 static lua_State *g_L = nullptr;
+static std::mutex g_luaMutex;
 static std::string g_hprStoreVersion = "0.1";
 
 std::string getHprStoreCurrentVersion() { return g_hprStoreVersion; }
 
 void reloadMyselfViaLua() {
+  std::lock_guard<std::mutex> lock(g_luaMutex);
   if (!g_L) {
     std::cerr
         << "[HPR-Store-Library] reloadMyselfViaLua: lua_State pointer is null!"
@@ -61,6 +63,7 @@ void reloadMyselfViaLua() {
 }
 
 void refreshExtensionsViaLua() {
+  std::lock_guard<std::mutex> lock(g_luaMutex);
   if (!g_L) {
     std::cerr << "[HPR-Store-Library] refreshExtensionsViaLua: lua_State "
                  "pointer is null!"
@@ -104,6 +107,7 @@ void refreshExtensionsViaLua() {
 
 void unloadExtensionViaLua(const std::string &authorName,
                            const std::string &extensionName) {
+  std::lock_guard<std::mutex> lock(g_luaMutex);
   if (!g_L) {
     std::cerr << "[HPR-Store-Library] unloadExtensionViaLua: lua_State pointer "
                  "is null!"

@@ -48,12 +48,12 @@ RegistryManager::~RegistryManager() = default;
 
 std::optional<StoreItem> RegistryManager::getItemById(const std::string& id) const
 {
+    std::lock_guard<std::mutex> lock(registryMutex);
     for (const auto& item : allItems)
     {
         if (item.id == id)
             return item;
     }
-    // Fallback: also check items (current page)
     for (const auto& item : items)
     {
         if (item.id == id)
@@ -95,6 +95,7 @@ std::filesystem::path RegistryManager::getLocalRegistryPath() const
 
 void RegistryManager::readLocalRegistry()
 {
+    std::lock_guard<std::mutex> lock(registryMutex);
     allItems.clear();
     pageOrder.clear();
     seenIds.clear();
@@ -171,12 +172,14 @@ void RegistryManager::updateDatabase()
 
 void RegistryManager::sortItems(SortMode mode)
 {
+    std::lock_guard<std::mutex> lock(registryMutex);
     currentSort = mode;
     rebuildPageOrder();
 }
 
 std::vector<StoreItem> RegistryManager::getPage(int page) const
 {
+    std::lock_guard<std::mutex> lock(registryMutex);
     std::vector<StoreItem> result;
     if (allItems.empty()) return result;
 
