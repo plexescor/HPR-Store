@@ -6,7 +6,7 @@
     "authorGithub": "https://github.com/plexescor",
     "description": "Cross-platform native extension and store manager UI for HPR.",
     "longDescription": "### HPR Store\n\nA cross-platform native extension and store manager UI for **HPR** (Human Pattern Recorder), built with **C++**, **Slint**, **Lua**, and **libarchive**.\n\nIt allows browsing, filtering, installing, and updating extensions and themes for HPR directly from inside the HPR application interface.",
-    "version": "0.2",
+    "version": "0.1",
     "downloadUrl": "https://github.com/plexescor/HPR-Store/releases/download/v0.1/HPR-Store.zip",
     "sourceUrl": "https://github.com/plexescor/HPR-Store",
     "type": "EXTENSION",
@@ -33,7 +33,7 @@
     "description": "Monitors system idle status and automatically pauses/resumes HPR tracking when the user goes idle.",
     "longDescription": "### HPR Idle Detection Extension\n\nA native **C++ & Lua** extension for HPR that monitors system idle status and automatically manages tracking lifecycle events.\n\n### Features\n- **Auto Pause & Resume** — Tracking stops when idle time exceeds the configured threshold and resumes when activity returns.\n- **Configurable Threshold** — Set idle timeout via `idle_detection_config.csv` (default: 8 minutes).\n- **Cross-Platform** — Supports Windows, Linux (GNOME, Hyprland, niri) and any Wayland compositor implementing `ext-idle-notify-v1`.\n\n### Platform Support\n- **Windows** — Uses `GetLastInputInfo` (Win32 API)\n- **Linux (GNOME)** — Uses `org.gnome.Mutter.IdleMonitor` D-Bus\n- **Linux (Wayland)** — Uses `ext-idle-notify-v1` protocol (KDE, Hyprland, Sway, niri, etc.)\n\n> **Note:** X11 sessions are not supported.",
     "version": "0.2",
-    "downloadUrl": "https://github.com/plexescor/HPR-Idle-Detection-Extension/releases/download/v0.1/HPR-Idle-Detection-Extension.zip",
+    "downloadUrl": "https://github.com/plexescor/HPR-Idle-Detection-Extension/releases/download/v0.2/HPR-Idle-Detection-Extension.zip",
     "sourceUrl": "https://github.com/plexescor/HPR-Idle-Detection-Extension",
     "type": "EXTENSION",
     "tags": [
