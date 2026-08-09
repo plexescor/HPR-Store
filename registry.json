@@ -6,7 +6,7 @@
     "authorGithub": "https://github.com/plexescor",
     "description": "Cross-platform native extension and store manager UI for HPR.",
     "longDescription": "### HPR Store\n\nA cross-platform native extension and store manager UI for **HPR** (Human Pattern Recorder), built with **C++**, **Slint**, **Lua**, and **libarchive**.\n\nIt allows browsing, filtering, installing, and updating extensions and themes for HPR directly from inside the HPR application interface.",
-    "version": "0.1",
+    "version": "0.2",
     "downloadUrl": "https://github.com/plexescor/HPR-Store/releases/download/v0.1/HPR-Store.zip",
     "sourceUrl": "https://github.com/plexescor/HPR-Store",
     "type": "EXTENSION",
