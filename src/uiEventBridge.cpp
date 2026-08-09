@@ -2,6 +2,11 @@
 #include "installer.hpp"
 #include <slint/slint.h>
 #include <iostream>
+#include <string>
+
+extern std::string getHprStoreCurrentVersion();
+extern void reloadMyselfViaLua();
+extern void refreshExtensionsViaLua();
 #include <vector>
 #include <memory>
 #include <thread>
@@ -98,11 +103,21 @@ static StoreItem_S toSlintStoreItem(const StoreItem& item, const std::unordered_
     auto installedIt = installedItems.find(item.id);
     s.installed = (installedIt != installedItems.end());
 
-    // upgradable: installed but version mismatch (both non-empty)
-    s.upgradable = false;
-    if (s.installed && !item.version.empty() && !installedIt->second.version.empty())
+    // Special check for HPR Store itself
+    if (item.id == "hpr-store")
     {
-        s.upgradable = (installedIt->second.version != item.version);
+        s.installed = true;
+        std::string currentVer = getHprStoreCurrentVersion();
+        s.upgradable = (!item.version.empty() && item.version != currentVer);
+    }
+    else
+    {
+        // upgradable: installed but version mismatch (both non-empty)
+        s.upgradable = false;
+        if (s.installed && !item.version.empty() && !installedIt->second.version.empty())
+        {
+            s.upgradable = (installedIt->second.version != item.version);
+        }
     }
 
     return s;
@@ -127,6 +142,19 @@ void UIEventBridge::updateStoreItemsUI()
         itemsModel->push_back(toSlintStoreItem(item, installedItems));
 
     ui->set_storeItems(itemsModel);
+
+    // Check if HPR Store itself has an update in registryManager
+    auto maybeSelf = registryManager->getItemById("hpr-store");
+    if (maybeSelf)
+    {
+        std::string currentVer = getHprStoreCurrentVersion();
+        ui->set_selfUpgradable(!maybeSelf->version.empty() && maybeSelf->version != currentVer);
+    }
+    else
+    {
+        ui->set_selfUpgradable(false);
+    }
+
     updatePaginationUI();
 }
 
@@ -225,6 +253,48 @@ void UIEventBridge::triggerRefresh()
 void UIEventBridge::setupEvents()
 {
     if (!registryManager) return;
+
+    ui->on_self_upgrade_clicked([this]()
+    {
+        std::cout << "[UIEventBridge] Topbar UPDATE clicked for HPR Store." << std::endl;
+        auto maybeItem = registryManager ? registryManager->getItemById("hpr-store") : std::nullopt;
+        if (!maybeItem) return;
+
+        ui->set_installing(true);
+        ui->set_isUninstall(false);
+        ui->set_installProgressText("SELF UPGRADING...");
+        ui->set_taskActive(true);
+        ui->set_taskType(slint::SharedString("install"));
+        ui->set_taskStatusText(slint::SharedString("SELF UPGRADING..."));
+        ui->set_installResultVisible(false);
+
+        std::thread([this, item = *maybeItem]()
+        {
+            InstallResult result = Installer::selfUpgrade(item, [this](std::string progress) {
+                slint::invoke_from_event_loop([this, progress]() {
+                    ui->set_installProgressText(slint::SharedString(progress));
+                    ui->set_taskStatusText(slint::SharedString(progress));
+                });
+            });
+
+            slint::invoke_from_event_loop([this, result]()
+            {
+                ui->set_installing(false);
+                ui->set_taskActive(false);
+                if (result.success)
+                {
+                    std::cout << "[UIEventBridge] Self-upgrade successful! Triggering HPR.reloadMyself()..." << std::endl;
+                    reloadMyselfViaLua();
+                }
+                else
+                {
+                    ui->set_installSuccess(false);
+                    ui->set_installErrorMessage(slint::SharedString(result.errorMessage));
+                    ui->set_installResultVisible(true);
+                }
+            });
+        }).detach();
+    });
 
     ui->on_refresh_clicked([this]()
     {
@@ -464,6 +534,7 @@ void UIEventBridge::setupEvents()
                 // Instantly update the list items to show "INSTALLED" if successful
                 if (result.success)
                 {
+                    refreshExtensionsViaLua();
                     updateStoreItemsUI();
                     
                     // Also update the currently open detail view selectedItem copy's installed state
@@ -489,6 +560,47 @@ void UIEventBridge::setupEvents()
             return;
         }
 
+        // Special handling for HPR Store self-update
+        if (std::string(itemId) == "hpr-store")
+        {
+            std::cout << "[UIEventBridge] Self-upgrade requested for HPR Store." << std::endl;
+            ui->set_installing(true);
+            ui->set_isUninstall(false);
+            ui->set_installProgressText("SELF UPGRADING...");
+            ui->set_taskActive(true);
+            ui->set_taskType(slint::SharedString("install"));
+            ui->set_taskStatusText(slint::SharedString("SELF UPGRADING..."));
+            ui->set_installResultVisible(false);
+
+            std::thread([this, item = *maybeItem]()
+            {
+                InstallResult result = Installer::selfUpgrade(item, [this](std::string progress) {
+                    slint::invoke_from_event_loop([this, progress]() {
+                        ui->set_installProgressText(slint::SharedString(progress));
+                        ui->set_taskStatusText(slint::SharedString(progress));
+                    });
+                });
+
+                slint::invoke_from_event_loop([this, result]()
+                {
+                    ui->set_installing(false);
+                    ui->set_taskActive(false);
+                    if (result.success)
+                    {
+                        std::cout << "[UIEventBridge] Self-upgrade successful! Triggering HPR.reloadMyself()..." << std::endl;
+                        reloadMyselfViaLua();
+                    }
+                    else
+                    {
+                        ui->set_installSuccess(false);
+                        ui->set_installErrorMessage(slint::SharedString(result.errorMessage));
+                        ui->set_installResultVisible(true);
+                    }
+                });
+            }).detach();
+            return;
+        }
+
         std::cout << "[UIEventBridge] Upgrade requested for: " << itemId.data() << std::endl;
         ui->set_installing(true);
         ui->set_isUninstall(false);
@@ -500,6 +612,9 @@ void UIEventBridge::setupEvents()
 
         std::thread([this, item = *maybeItem]()
         {
+            // Synchronously unload extension via Lua before upgrading files
+            Installer::unloadIfRunning(item.id);
+
             InstallResult result = Installer::upgrade(item, [this](std::string progress) {
                 slint::invoke_from_event_loop([this, progress]() {
                     ui->set_installProgressText(slint::SharedString(progress));
@@ -521,6 +636,7 @@ void UIEventBridge::setupEvents()
 
                 if (result.success)
                 {
+                    refreshExtensionsViaLua();
                     updateStoreItemsUI();
                     auto currentSelected = ui->get_selectedItem();
                     if (std::string(currentSelected.id) == item.id)
@@ -555,6 +671,9 @@ void UIEventBridge::setupEvents()
 
         std::thread([this, item = *maybeItem]()
         {
+            // Synchronously unload extension via Lua before deleting files
+            Installer::unloadIfRunning(item.id);
+
             bool success = Installer::uninstall(item.id, item.type);
 
             slint::invoke_from_event_loop([this, success, item]()

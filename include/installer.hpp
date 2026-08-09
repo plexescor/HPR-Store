@@ -16,6 +16,8 @@ struct InstalledRecord
 {
     std::string folder;
     std::string version;
+    std::string authorName;
+    std::string extensionName;
 };
 
 class Installer
@@ -29,6 +31,13 @@ public:
 
     // Upgrade an already-installed item by merge-copying new files over the existing folder.
     // Preserves files that exist only in the destination (e.g. user config files).
+    // Self-upgrade HPR Store by renaming active library binaries to .old before copying
+    static InstallResult selfUpgrade(
+        const StoreItem& item,
+        std::function<void(std::string)> progressCallback = [](std::string){});
+
+    static void cleanupOldFiles();
+
     static InstallResult upgrade(
         const StoreItem& item,
         std::function<void(std::string)> progressCallback = [](std::string){});
@@ -36,10 +45,19 @@ public:
     // Uninstall an item from HPR and update database.
     static bool uninstall(const std::string& id, StoreItemType type);
 
-    // Installed status database helpers (new schema: id → {folder, version})
+    // Synchronously unload an extension via Lua if currently running
+    static void unloadIfRunning(const std::string& itemId);
+
+    // Installed status database helpers (schema: id → {folder, version, authorName, extensionName})
     static std::filesystem::path storeBasePath();
     static std::unordered_map<std::string, InstalledRecord> loadInstalledItems();
     static void saveInstalledItems(const std::unordered_map<std::string, InstalledRecord>& items);
+
+    // Parse authorName and extensionName from the primary .lua file inside installRoot
+    static void parseLuaMetadata(
+        const std::filesystem::path& installRoot,
+        std::string& outAuthor,
+        std::string& outName);
 
     // Determine the HPR base config path (~/.config/HPR/ or %APPDATA%/HPR/HPR_Config/)
     static std::filesystem::path hprBasePath();

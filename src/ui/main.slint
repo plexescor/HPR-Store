@@ -187,10 +187,14 @@ export component StoreWindow inherits Window {
     property <string> pageJumpText: "";
     property <bool> pageJumpInvalid: false;
 
+    // Self-update button state
+    in property <bool> selfUpgradable: false;
+
     callback refresh-clicked();
     callback install-item-clicked(string);
     callback uninstall-item-clicked(string);
     callback upgrade-item-clicked(string);
+    callback self-upgrade-clicked();
     callback next-page-clicked();
     callback prev-page-clicked();
     callback go-to-page-clicked(string);  // C++ does int parsing & clamping
@@ -244,6 +248,30 @@ export component StoreWindow inherits Window {
                                 font-weight: 700;
                                 letter-spacing: 4px * Palette.scale;
                                 vertical-alignment: center;
+                            }
+
+                            if selfUpgradable : Rectangle {
+                                width: 66px * Palette.scale;
+                                height: 24px * Palette.scale;
+                                border-radius: 5px * Palette.scale;
+                                background: #f59e0b;
+                                y: (parent.height - self.height) / 2;
+
+                                ta-self-upg := TouchArea {
+                                    mouse-cursor: pointer;
+                                    clicked => { root.self-upgrade-clicked(); }
+                                }
+
+                                Text {
+                                    text: "UPDATE";
+                                    color: #000000;
+                                    font-size: 9px * Palette.scale;
+                                    font-weight: 800;
+                                    letter-spacing: 1px * Palette.scale;
+                                    horizontal-alignment: center;
+                                    vertical-alignment: center;
+                                    opacity: ta-self-upg.has-hover ? 0.8 : 1.0;
+                                }
                             }
 
                             if taskActive : HorizontalLayout {
@@ -870,6 +898,7 @@ export component StoreWindow inherits Window {
                                             y: (parent.height - self.height) / 2;
 
                                             ta-upgrade := TouchArea {
+                                                mouse-cursor: pointer;
                                                 clicked => { root.upgrade-item-clicked(item.id); }
                                             }
 
@@ -938,6 +967,7 @@ export component StoreWindow inherits Window {
                                             y: (parent.height - self.height) / 2;
 
                                             ta-detail-upgrade := TouchArea {
+                                                mouse-cursor: pointer;
                                                 clicked => { root.upgrade-item-clicked(selectedItem.id); }
                                             }
 

@@ -76,6 +76,10 @@ std::unordered_map<std::string, InstalledRecord> Installer::loadInstalledItems()
                             rec.folder = el.value()["folder"].get<std::string>();
                         if (el.value().contains("version") && el.value()["version"].is_string())
                             rec.version = el.value()["version"].get<std::string>();
+                        if (el.value().contains("authorName") && el.value()["authorName"].is_string())
+                            rec.authorName = el.value()["authorName"].get<std::string>();
+                        if (el.value().contains("extensionName") && el.value()["extensionName"].is_string())
+                            rec.extensionName = el.value()["extensionName"].get<std::string>();
                     }
                     if (!rec.folder.empty())
                         installed[el.key()] = rec;
@@ -88,6 +92,23 @@ std::unordered_map<std::string, InstalledRecord> Installer::loadInstalledItems()
         std::cerr << "[Installer] Failed to load installed database: " << e.what() << std::endl;
     }
     return installed;
+}
+
+extern void unloadExtensionViaLua(const std::string& authorName, const std::string& extensionName);
+
+void Installer::unloadIfRunning(const std::string& itemId)
+{
+    auto installedMap = loadInstalledItems();
+    auto it = installedMap.find(itemId);
+    if (it != installedMap.end())
+    {
+        if (!it->second.authorName.empty() && !it->second.extensionName.empty())
+        {
+            std::cout << "[Installer] Unloading extension prior to modification: "
+                      << it->second.authorName << " / " << it->second.extensionName << std::endl;
+            unloadExtensionViaLua(it->second.authorName, it->second.extensionName);
+        }
+    }
 }
 
 void Installer::saveInstalledItems(const std::unordered_map<std::string, InstalledRecord>& items)
@@ -103,8 +124,10 @@ void Installer::saveInstalledItems(const std::unordered_map<std::string, Install
         for (const auto& pair : items)
         {
             j[pair.first] = {
-                {"folder",  pair.second.folder},
-                {"version", pair.second.version}
+                {"folder",        pair.second.folder},
+                {"version",       pair.second.version},
+                {"authorName",    pair.second.authorName},
+                {"extensionName", pair.second.extensionName}
             };
         }
         std::ofstream file(dbPath, std::ios::trunc);
@@ -496,8 +519,13 @@ InstallResult Installer::install(const StoreItem& item, std::function<void(std::
     }
 
     // ── 7. Update local installed database (with version) ─────────────────────
+    std::string authorName, extensionName;
+    if (item.type == StoreItemType::EXTENSION)
+    {
+        parseLuaMetadata(destDir, authorName, extensionName);
+    }
     auto installed = loadInstalledItems();
-    installed[item.id] = InstalledRecord{ targetFolderName, item.version };
+    installed[item.id] = InstalledRecord{ targetFolderName, item.version, authorName, extensionName };
     saveInstalledItems(installed);
 
     // ── 8. Cleanup ────────────────────────────────────────────────────────────
@@ -616,11 +644,224 @@ InstallResult Installer::upgrade(const StoreItem& item, std::function<void(std::
     }
 
     // ── 6. Update version in installed database ───────────────────────────────
-    installed[item.id] = InstalledRecord{ existingFolder, item.version };
+    std::string authorName, extensionName;
+    if (item.type == StoreItemType::EXTENSION)
+    {
+        parseLuaMetadata(destDir, authorName, extensionName);
+    }
+    installed[item.id] = InstalledRecord{ existingFolder, item.version, authorName, extensionName };
     saveInstalledItems(installed);
 
     cleanup();
 
+    result.success = true;
+    return result;
+}
+
+void Installer::parseLuaMetadata(
+    const std::filesystem::path& installRoot,
+    std::string& outAuthor,
+    std::string& outName)
+{
+    outAuthor.clear();
+    outName.clear();
+
+    if (!std::filesystem::exists(installRoot)) return;
+
+    const std::string quoteChars = "\"'";
+
+    for (const auto& entry : std::filesystem::recursive_directory_iterator(installRoot))
+    {
+        if (entry.is_regular_file() && entry.path().extension() == ".lua")
+        {
+            std::ifstream file(entry.path());
+            if (!file.is_open()) continue;
+
+            std::string line;
+            while (std::getline(file, line))
+            {
+                auto posExt = line.find("HPR.extensionName");
+                if (posExt != std::string::npos)
+                {
+                    auto q1 = line.find_first_of(quoteChars, posExt);
+                    if (q1 != std::string::npos)
+                    {
+                        auto q2 = line.find_first_of(quoteChars, q1 + 1);
+                        if (q2 != std::string::npos)
+                        {
+                            outName = line.substr(q1 + 1, q2 - q1 - 1);
+                        }
+                    }
+                }
+
+                auto posAuth = line.find("HPR.authorName");
+                if (posAuth != std::string::npos)
+                {
+                    auto q1 = line.find_first_of(quoteChars, posAuth);
+                    if (q1 != std::string::npos)
+                    {
+                        auto q2 = line.find_first_of(quoteChars, q1 + 1);
+                        if (q2 != std::string::npos)
+                        {
+                            outAuthor = line.substr(q1 + 1, q2 - q1 - 1);
+                        }
+                    }
+                }
+
+                if (!outAuthor.empty() && !outName.empty())
+                    break;
+            }
+            file.close();
+            if (!outAuthor.empty() || !outName.empty())
+                break;
+        }
+    }
+}
+
+void Installer::cleanupOldFiles()
+{
+    auto base = hprBasePath();
+    if (base.empty()) return;
+    auto storeDir = base / "extensions" / "HPR-Store";
+    if (!std::filesystem::exists(storeDir)) return;
+
+    try
+    {
+        for (const auto& entry : std::filesystem::directory_iterator(storeDir))
+        {
+            if (entry.is_regular_file() && entry.path().extension() == ".old")
+            {
+                std::error_code ec;
+                std::filesystem::remove(entry.path(), ec);
+                if (!ec)
+                {
+                    std::cout << "[Installer] Cleaned up leftover file: " << entry.path() << std::endl;
+                }
+            }
+        }
+    }
+    catch (...) {}
+}
+
+InstallResult Installer::selfUpgrade(const StoreItem& item, std::function<void(std::string)> progressCallback)
+{
+    InstallResult result;
+    cleanupOldFiles();
+
+    if (item.downloadUrl.empty())
+    {
+        result.errorMessage = "No download URL available for self update";
+        return result;
+    }
+
+    auto installed = loadInstalledItems();
+    auto it = installed.find(item.id);
+    std::string existingFolder = (it != installed.end()) ? it->second.folder : "HPR-Store";
+
+    auto base = hprBasePath();
+    if (base.empty())
+    {
+        result.errorMessage = "Could not determine HPR config directory";
+        return result;
+    }
+
+    std::filesystem::path destDir = base / "extensions" / existingFolder;
+
+    progressCallback("DOWNLOADING SELF UPDATE...");
+    std::filesystem::path tempBase;
+    try
+    {
+        tempBase = std::filesystem::temp_directory_path() / "hpr-store-self-upgrade";
+        std::filesystem::create_directories(tempBase);
+    }
+    catch (const std::exception& e)
+    {
+        result.errorMessage = "Failed to create temp directory: " + std::string(e.what());
+        return result;
+    }
+
+    auto cleanup = [&]()
+    {
+        progressCallback("CLEANING UP...");
+        try { std::filesystem::remove_all(tempBase); }
+        catch (...) {}
+    };
+
+    std::string dlError;
+    auto archivePath = downloadArchive(item.downloadUrl, tempBase, dlError);
+    if (archivePath.empty())
+    {
+        result.errorMessage = dlError;
+        cleanup();
+        return result;
+    }
+
+    progressCallback("EXTRACTING UPDATE...");
+    auto extractedDir = tempBase / "extracted";
+    std::filesystem::create_directories(extractedDir);
+
+    std::string extractError;
+    if (!extractArchive(archivePath, extractedDir, extractError))
+    {
+        result.errorMessage = extractError;
+        cleanup();
+        return result;
+    }
+
+    progressCallback("LOCATING ROOT FOLDER...");
+    std::string findError;
+    auto installRoot = findInstallRoot(extractedDir, item.type, findError);
+    if (installRoot.empty())
+    {
+        result.errorMessage = findError;
+        cleanup();
+        return result;
+    }
+
+    progressCallback("STAGING REPLACEMENT...");
+    try
+    {
+        std::filesystem::create_directories(destDir);
+
+        // Rename existing active binary files (.so / .dll) to .old before replacing
+        for (const auto& entry : std::filesystem::directory_iterator(destDir))
+        {
+            if (entry.is_regular_file())
+            {
+                auto ext = entry.path().extension().string();
+                if (ext == ".so" || ext == ".dll")
+                {
+                    auto oldPath = entry.path();
+                    oldPath += ".old";
+                    std::error_code ec;
+                    std::filesystem::rename(entry.path(), oldPath, ec);
+                    if (ec)
+                    {
+                        std::cerr << "[Installer] Warning renaming active library " << entry.path() << ": " << ec.message() << std::endl;
+                    }
+                }
+            }
+        }
+
+        std::filesystem::copy(
+            installRoot, destDir,
+            std::filesystem::copy_options::recursive |
+            std::filesystem::copy_options::overwrite_existing);
+        std::cout << "[Installer] Self-Upgraded: " << destDir << std::endl;
+    }
+    catch (const std::exception& e)
+    {
+        result.errorMessage = "Failed to merge self-upgrade files: " + std::string(e.what());
+        cleanup();
+        return result;
+    }
+
+    std::string authorName, extensionName;
+    parseLuaMetadata(destDir, authorName, extensionName);
+    installed[item.id] = InstalledRecord{ existingFolder, item.version, authorName, extensionName };
+    saveInstalledItems(installed);
+
+    cleanup();
     result.success = true;
     return result;
 }
