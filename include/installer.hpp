@@ -36,6 +36,7 @@ public:
         const StoreItem& item,
         std::function<void(std::string)> progressCallback = [](std::string){});
 
+    static std::filesystem::path getSelfExtensionDir();
     static void cleanupOldFiles();
 
     static InstallResult upgrade(

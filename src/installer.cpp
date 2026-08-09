@@ -718,12 +718,64 @@ void Installer::parseLuaMetadata(
     }
 }
 
+
+#ifndef _WIN32
+#include <dlfcn.h>
+#else
+#include <windows.h>
+#endif
+
+std::filesystem::path Installer::getSelfExtensionDir()
+{
+    // 1. Primary: Use OS APIs to inspect exact loaded module path
+    void (*pSelfDir)() = &Installer::cleanupOldFiles;
+#ifndef _WIN32
+    Dl_info info;
+    if (dladdr((const void*)pSelfDir, &info) && info.dli_fname)
+    {
+        auto path = std::filesystem::path(info.dli_fname).parent_path();
+        if (std::filesystem::exists(path))
+        {
+            std::cout << "[Installer] getSelfExtensionDir: Resolved via OS API (dladdr): " << path << std::endl;
+            return path;
+        }
+    }
+#else
+    wchar_t path[MAX_PATH];
+    HMODULE hm = NULL;
+    if (GetModuleHandleExW(GET_MODULE_HANDLE_EX_FLAG_FROM_ADDRESS |
+                        GET_MODULE_HANDLE_EX_FLAG_UNCHANGED_REFCOUNT,
+                        (LPCWSTR)(void*)pSelfDir, &hm))
+    {
+        GetModuleFileNameW(hm, path, MAX_PATH);
+        auto winPath = std::filesystem::path(path).parent_path();
+        if (std::filesystem::exists(winPath))
+        {
+            std::cout << "[Installer] getSelfExtensionDir: Resolved via OS API (GetModuleFileNameW): " << winPath << std::endl;
+            return winPath;
+        }
+    }
+#endif
+
+    // 2. Secondary fallback: Use installed.json folder record or default "HPR-Store"
+    auto installed = loadInstalledItems();
+    auto it = installed.find("hpr-store");
+    std::string folderName = (it != installed.end()) ? it->second.folder : "HPR-Store";
+    auto base = hprBasePath();
+    if (!base.empty())
+    {
+        auto fallbackPath = base / "extensions" / folderName;
+        std::cout << "[Installer] getSelfExtensionDir: Resolved via installed.json fallback: " << fallbackPath << std::endl;
+        return fallbackPath;
+    }
+
+    return {};
+}
+
 void Installer::cleanupOldFiles()
 {
-    auto base = hprBasePath();
-    if (base.empty()) return;
-    auto storeDir = base / "extensions" / "HPR-Store";
-    if (!std::filesystem::exists(storeDir)) return;
+    auto storeDir = getSelfExtensionDir();
+    if (storeDir.empty() || !std::filesystem::exists(storeDir)) return;
 
     try
     {
@@ -743,6 +795,7 @@ void Installer::cleanupOldFiles()
     catch (...) {}
 }
 
+
 InstallResult Installer::selfUpgrade(const StoreItem& item, std::function<void(std::string)> progressCallback)
 {
     InstallResult result;
@@ -754,18 +807,14 @@ InstallResult Installer::selfUpgrade(const StoreItem& item, std::function<void(s
         return result;
     }
 
-    auto installed = loadInstalledItems();
-    auto it = installed.find(item.id);
-    std::string existingFolder = (it != installed.end()) ? it->second.folder : "HPR-Store";
-
-    auto base = hprBasePath();
-    if (base.empty())
+    std::filesystem::path destDir = getSelfExtensionDir();
+    if (destDir.empty())
     {
-        result.errorMessage = "Could not determine HPR config directory";
+        result.errorMessage = "Could not determine self extension directory";
         return result;
     }
-
-    std::filesystem::path destDir = base / "extensions" / existingFolder;
+    std::string existingFolder = destDir.filename().string();
+    auto installed = loadInstalledItems();
 
     progressCallback("DOWNLOADING SELF UPDATE...");
     std::filesystem::path tempBase;
