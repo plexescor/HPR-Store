@@ -1,3 +1,4 @@
+#include <ixwebsocket/IXNetSystem.h>
 #include "GUI.hpp"
 #include "lua.hpp"
 #include "sol.hpp"
@@ -161,6 +162,7 @@ static SlintInvokeFn g_hprInvoke = nullptr;
 
 extern "C" HPR_EXPORT void initialize(lua_State *L) {
   g_L = L;
+  ix::initNetSystem();
   HMODULE hpr = GetModuleHandleA(nullptr);
   g_hprInvoke = (SlintInvokeFn)GetProcAddress(hpr, "HPR_invokeOnSlintThread");
 
@@ -190,6 +192,8 @@ extern "C" HPR_EXPORT void initialize(lua_State *L) {
 
 extern "C" HPR_EXPORT void destroy(lua_State *L) {
   g_L = L;
+  ix::uninitNetSystem();
+  ix::initNetSystem();
   std::promise<void> done;
   auto fut = done.get_future();
 
@@ -209,6 +213,7 @@ extern "C" HPR_EXPORT void destroy(lua_State *L) {
 
 extern "C" HPR_EXPORT void showUi(lua_State *L) {
   g_L = L;
+  ix::initNetSystem();
   slint::invoke_from_event_loop([] {
     if (!gui) {
       gui = std::make_unique<GUI>();
