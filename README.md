@@ -97,13 +97,34 @@ sudo pacman -S base-devel cmake libarchive openssl zlib
 ### Windows
 - **Visual Studio 2022** / MSVC C++ Desktop Development tools
 - **CMake** (version >= 3.21)
-- libarchive (provided automatically through CMake's internal system library or fetched from source via FetchContent)
+- **vcpkg** (for OpenSSL static linking)
+- libarchive (fetched automatically via FetchContent)
+
+#### Setting up vcpkg + OpenSSL + zlib (one-time)
+```bash
+cd C:\
+git clone https://github.com/microsoft/vcpkg.git
+cd vcpkg
+bootstrap-vcpkg.bat
+vcpkg install openssl:x64-windows-static zlib:x64-windows-static
+```
+
+#### Build Instructions (Windows)
+```bash
+mkdir build
+cd build
+cmake .. -DCMAKE_BUILD_TYPE=Debug -DCMAKE_TOOLCHAIN_FILE=C:/vcpkg/scripts/buildsystems/vcpkg.cmake -DVCPKG_TARGET_TRIPLET=x64-windows-static -DCMAKE_PREFIX_PATH="C:/Program Files/Slint-cpp 1.16.1"
+cmake --build . --config Release
+```
 
 ---
 
 ## Build Instructions
 
 To build the HPR-Store library shared object:
+
+> [!NOTE]
+> **Windows users:** Use the build commands from the [Windows Build Instructions](#build-instructions-windows) section above instead of the generic `cmake ..` line. The toolchain file and static triplet flags are required for OpenSSL + zlib to link statically into the DLL.
 
 ```bash
 # 1. Create and enter build folder

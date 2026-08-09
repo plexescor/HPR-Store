@@ -9,7 +9,12 @@ set(CMAKE_CXX_EXTENSIONS OFF)
 set(CMAKE_BUILD_PARALLEL_LEVEL 8)
 set(CMAKE_POSITION_INDEPENDENT_CODE ON)
 
-# Find Slint (only dependency required)
+
+
+
+if(WIN32)
+    list(APPEND CMAKE_PREFIX_PATH "C:/Program Files/Slint-cpp 1.16.1")
+endif()
 find_package(Slint REQUIRED)
 
 file(GLOB_RECURSE LUA_SOURCES "external/lua/*.c")
@@ -21,12 +26,14 @@ if(UNIX)
         POSITION_INDEPENDENT_CODE ON
     )
 endif()
-
+if(WIN32)
+    set(CMAKE_C_FLAGS "${CMAKE_C_FLAGS} /Oi-")
+endif()
 include(FetchContent)
 FetchContent_Declare(
     ixwebsocket
     GIT_REPOSITORY https://github.com/machinezone/IXWebSocket.git
-    GIT_TAG        v12.0.1 # Use the latest stable tag
+    GIT_TAG        v12.0.1
 )
 
 FetchContent_Declare(
@@ -35,30 +42,53 @@ FetchContent_Declare(
     DOWNLOAD_EXTRACT_TIMESTAMP TRUE
 )
 
-# 2. Tell IXWebSocket to use native OS TLS (Schannel on Win / SecureTransport on Mac)
-set(USE_TLS ON CACHE BOOL "" FORCE)
 
+set(USE_TLS ON CACHE BOOL "" FORCE)
+if(WIN32)
+    set(USE_MBED_TLS ON CACHE BOOL "" FORCE)
+    set(USE_OPEN_SSL OFF CACHE BOOL "" FORCE)
+    set(ENABLE_TESTING OFF CACHE BOOL "" FORCE)
+    set(ENABLE_PROGRAMS OFF CACHE BOOL "" FORCE)
+    add_subdirectory(external/mbedtls)
+endif()
+if(WIN32)
+    set(MBEDTLS_INCLUDE_DIRS "${CMAKE_CURRENT_SOURCE_DIR}/external/mbedtls/include" CACHE PATH "" FORCE)
+    set(MBEDTLS_LIBRARY mbedtls CACHE STRING "" FORCE)
+    set(MBEDX509_LIBRARY mbedx509 CACHE STRING "" FORCE)
+    set(MBEDCRYPTO_LIBRARY mbedcrypto CACHE STRING "" FORCE)
+endif()
+
+add_subdirectory(external/zlib)
+set(ZLIB_LIBRARY zlibstatic CACHE STRING "" FORCE)
+set(ZLIB_INCLUDE_DIR "${CMAKE_CURRENT_SOURCE_DIR}/external/zlib" "${CMAKE_CURRENT_BINARY_DIR}/external/zlib" CACHE STRING "" FORCE)
+set(IXWEBSOCKET_INSTALL OFF CACHE BOOL "" FORCE)
 FetchContent_MakeAvailable(ixwebsocket nlohmann_json)
 
-# libarchive: try system first, fall back to FetchContent
 find_package(LibArchive QUIET)
 if(NOT LibArchive_FOUND)
     message(STATUS "libarchive not found via find_package, fetching from source...")
+    set(HAVE_WCSCPY 0 CACHE INTERNAL "" FORCE)
+    set(HAVE_WCSLEN 0 CACHE INTERNAL "" FORCE)
     set(ENABLE_TEST OFF CACHE BOOL "" FORCE)
     set(ENABLE_TAR OFF CACHE BOOL "" FORCE)
     set(ENABLE_CPIO OFF CACHE BOOL "" FORCE)
     set(ENABLE_CAT OFF CACHE BOOL "" FORCE)
+    set(CMAKE_POLICY_VERSION_MINIMUM 3.5)
     FetchContent_Declare(
         libarchive_src
         GIT_REPOSITORY https://github.com/libarchive/libarchive.git
         GIT_TAG        v3.7.4
     )
+    set(HAVE_WCSCPY 1 CACHE INTERNAL "" FORCE)
+set(HAVE_WCSLEN 1 CACHE INTERNAL "" FORCE)
     FetchContent_MakeAvailable(libarchive_src)
+    if(WIN32)
+    target_compile_options(archive_static PRIVATE /wd2491 /wd2169)
+endif()
     if(NOT TARGET LibArchive::LibArchive)
         add_library(LibArchive::LibArchive ALIAS archive_static)
     endif()
 endif()
-
 
 file(GLOB_RECURSE SOURCES "src/*.cpp")
 
@@ -70,16 +100,13 @@ if(WIN32)
     add_compile_definitions(NOMINMAX)
 endif()
 
-
-
 add_library(HPR-Store SHARED ${SOURCES})
 
-# Link Slint
 target_link_libraries(HPR-Store PRIVATE Slint::Slint)
 target_link_libraries(HPR-Store PRIVATE ixwebsocket)
 
 if(WIN32)
-    target_link_libraries(HPR-Store PRIVATE crypt32 ws2_32)
+    target_link_libraries(HPR-Store PRIVATE crypt32 ws2_32 secur32 mbedtls mbedx509 mbedcrypto)
 endif()
 
 if(EXISTS "${CMAKE_CURRENT_SOURCE_DIR}/src/ui/main.slint")
@@ -88,7 +115,7 @@ elseif(EXISTS "${CMAKE_CURRENT_SOURCE_DIR}/ui/main.slint")
     slint_target_sources(HPR-Store ui/main.slint)
 endif()
 
-set_target_properties(HPR-Store PROPERTIES 
+set_target_properties(HPR-Store PROPERTIES
     SLINT_EMBED_RESOURCES embed-files
 )
 
@@ -107,9 +134,11 @@ target_include_directories(HPR-Store
     include/
 )
 
-# On Windows, copy the Slint DLL next to the application binary so that it's found
-if (WIN32)
-    add_custom_command(TARGET HPR-Store POST_BUILD COMMAND ${CMAKE_COMMAND} -E copy $<TARGET_RUNTIME_DLLS:HPR-Store> $<TARGET_FILE_DIR:HPR-Store> COMMAND_EXPAND_LISTS)
+if(WIN32)
+    add_custom_command(TARGET HPR-Store POST_BUILD
+        COMMAND ${CMAKE_COMMAND} -E copy $<TARGET_RUNTIME_DLLS:HPR-Store> $<TARGET_FILE_DIR:HPR-Store>
+        COMMAND_EXPAND_LISTS
+    )
 endif()
 
 if(UNIX)
@@ -118,7 +147,6 @@ if(UNIX)
         HINTS "${Slint_DIR}/../.."
               "${Slint_DIR}/../../.."
     )
-
     if(SLINT_SO)
         add_custom_command(TARGET HPR-Store POST_BUILD
             COMMAND ${CMAKE_COMMAND} -E copy_if_different
@@ -141,21 +169,10 @@ else()
 endif()
 
 add_custom_command(TARGET HPR-Store POST_BUILD
-    COMMAND ${CMAKE_COMMAND} -E make_directory
-        "${HPR_EXTENSION_DIR}"
-
-    COMMAND ${CMAKE_COMMAND} -E copy_if_different
-        "$<TARGET_FILE:HPR-Store>"
-        "${HPR_EXTENSION_DIR}/"
-
-    COMMAND ${CMAKE_COMMAND} -E copy_if_different
-        "$<TARGET_FILE_DIR:HPR-Store>/HPR-Store.lua"
-        "${HPR_EXTENSION_DIR}/"
-
-    COMMAND ${CMAKE_COMMAND} -E copy_if_different
-        "${CMAKE_CURRENT_SOURCE_DIR}/registry.json"
-        "${HPR_EXTENSION_DIR}/registry.json"
-
+    COMMAND ${CMAKE_COMMAND} -E make_directory "${HPR_EXTENSION_DIR}"
+    COMMAND ${CMAKE_COMMAND} -E copy_if_different "$<TARGET_FILE:HPR-Store>" "${HPR_EXTENSION_DIR}/"
+    COMMAND ${CMAKE_COMMAND} -E copy_if_different "$<TARGET_FILE_DIR:HPR-Store>/HPR-Store.lua" "${HPR_EXTENSION_DIR}/"
+    COMMAND ${CMAKE_COMMAND} -E copy_if_different "${CMAKE_CURRENT_SOURCE_DIR}/registry.json" "${HPR_EXTENSION_DIR}/registry.json"
     COMMAND_EXPAND_LISTS
 )
 

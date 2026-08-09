@@ -73,19 +73,13 @@ std::filesystem::path RegistryManager::getLocalRegistryPath() const
         if (std::filesystem::exists(path)) return path;
     }
 #else
-    union {
-        void (*funcPtr)(const nlohmann::json&, StoreItem&);
-        LPCWSTR rawPtr;
-    } castUnion;
-    castUnion.funcPtr = pFromJson;
-
     wchar_t path[MAX_PATH];
     HMODULE hm = NULL;
-    if (GetModuleHandleEx(GET_MODULE_HANDLE_EX_FLAG_FROM_ADDRESS |
-                          GET_MODULE_HANDLE_EX_FLAG_UNCHANGED_REFCOUNT,
-                          castUnion.rawPtr, &hm))
+    if (GetModuleHandleExW(GET_MODULE_HANDLE_EX_FLAG_FROM_ADDRESS |
+                        GET_MODULE_HANDLE_EX_FLAG_UNCHANGED_REFCOUNT,
+                        (LPCWSTR)(void*)pFromJson, &hm))
     {
-        GetModuleFileName(hm, path, MAX_PATH);
+        GetModuleFileNameW(hm, path, MAX_PATH);
         auto winPath = std::filesystem::path(path).parent_path() / "registry.json";
         if (std::filesystem::exists(winPath)) return winPath;
     }

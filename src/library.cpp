@@ -7,25 +7,43 @@
 
 #ifdef _WIN32
 #define HPR_EXPORT __declspec(dllexport)
+#include <windows.h>
 #else
 #define HPR_EXPORT
 #endif
 
 static std::unique_ptr<GUI> gui;
 
+#ifdef _WIN32
+typedef void(*SlintInvokeFn)(void(*)(void*), void*);
+
+static SlintInvokeFn g_hprInvoke = nullptr;
+
 extern "C" HPR_EXPORT void initialize(lua_State* L)
 {
-    std::promise<void> ready;
-    auto fut = ready.get_future();
+    // get HPR.exe handle and load the function
+    HMODULE hpr = GetModuleHandleA(nullptr); // HPR.exe itself
+    g_hprInvoke = (SlintInvokeFn)GetProcAddress(hpr, "HPR_invokeOnSlintThread");
+    
+    if (!g_hprInvoke) {
+        return;
+    }
 
-    slint::invoke_from_event_loop([&ready]
-    {
+    struct InitData { std::promise<void>* ready; };
+    auto data = new InitData{ new std::promise<void>() };
+    auto fut = data->ready->get_future();
+
+    g_hprInvoke([](void* ud) {
+        auto d = static_cast<InitData*>(ud);
         gui = std::make_unique<GUI>();
-        ready.set_value();
-    });
+        d->ready->set_value();
+        delete d->ready;
+        delete d;
+    }, data);
 
     fut.wait();
 }
+#endif
 
 extern "C" HPR_EXPORT void destroy(lua_State* L)
 {
