@@ -204,6 +204,10 @@ void UIEventBridge::setupEvents()
     {
         std::cout << "[UIEventBridge] Update Database clicked. Fetching remote updates..." << std::endl;
         ui->set_databaseUpdating(true);
+        ui->set_taskActive(true);
+        ui->set_taskType(slint::SharedString("db"));
+        ui->set_taskStatusText(slint::SharedString("UPDATING DB..."));
+
         std::thread([this]()
         {
             registryManager->updateDatabase();
@@ -212,6 +216,7 @@ void UIEventBridge::setupEvents()
             {
                 updateStoreItemsUI();
                 ui->set_databaseUpdating(false);
+                ui->set_taskActive(false);
             });
         }).detach();
     });
@@ -408,6 +413,9 @@ void UIEventBridge::setupEvents()
         ui->set_installing(true);
         ui->set_isUninstall(false);
         ui->set_installProgressText("STARTING INSTALLATION...");
+        ui->set_taskActive(true);
+        ui->set_taskType(slint::SharedString("install"));
+        ui->set_taskStatusText(slint::SharedString("DOWNLOADING..."));
         ui->set_installResultVisible(false);
 
         std::thread([this, item = *maybeItem]()
@@ -415,12 +423,14 @@ void UIEventBridge::setupEvents()
             InstallResult result = Installer::install(item, [this](std::string progress) {
                 slint::invoke_from_event_loop([this, progress]() {
                     ui->set_installProgressText(slint::SharedString(progress));
+                    ui->set_taskStatusText(slint::SharedString(progress));
                 });
             });
 
             slint::invoke_from_event_loop([this, result, item]()
             {
                 ui->set_installing(false);
+                ui->set_taskActive(false);
                 ui->set_installSuccess(result.success);
                 ui->set_installErrorMessage(slint::SharedString(result.errorMessage));
                 ui->set_installResultVisible(true);
@@ -457,6 +467,9 @@ void UIEventBridge::setupEvents()
         ui->set_installing(true);
         ui->set_isUninstall(true);
         ui->set_installProgressText("UNINSTALLING...");
+        ui->set_taskActive(true);
+        ui->set_taskType(slint::SharedString("uninstall"));
+        ui->set_taskStatusText(slint::SharedString("UNINSTALLING..."));
         ui->set_installResultVisible(false);
 
         std::thread([this, item = *maybeItem]()
@@ -466,11 +479,20 @@ void UIEventBridge::setupEvents()
             slint::invoke_from_event_loop([this, success, item]()
             {
                 ui->set_installing(false);
+                ui->set_taskActive(false);
                 ui->set_installSuccess(success);
                 if (success) {
                     ui->set_installErrorMessage(slint::SharedString("Item uninstalled successfully."));
                 } else {
+#ifdef _WIN32
+                    if (item.type == StoreItemType::EXTENSION) {
+                        ui->set_installErrorMessage(slint::SharedString("Failed to uninstall item. The file is currently in use by Windows. Please unload or disable the extension in HPR before uninstalling."));
+                    } else {
+                        ui->set_installErrorMessage(slint::SharedString("Failed to uninstall item. The file is currently in use by Windows. Please unapply or switch your active theme in HPR before uninstalling."));
+                    }
+#else
                     ui->set_installErrorMessage(slint::SharedString("Failed to uninstall the item."));
+#endif
                 }
                 ui->set_installResultVisible(true);
                 

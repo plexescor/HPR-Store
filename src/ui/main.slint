@@ -170,6 +170,11 @@ export component StoreWindow inherits Window {
     // Loading overlay for database updating
     in property <bool> databaseUpdating: false;
 
+    // Background task indicator state (non-blocking)
+    in property <bool> taskActive: false;
+    in property <string> taskStatusText: "";
+    in property <string> taskType: "";
+
     // Install state
     in property <bool> installing: false;
     in-out property <bool> installResultVisible: false;
@@ -228,7 +233,7 @@ export component StoreWindow inherits Window {
                         alignment: space-between;
 
                         HorizontalLayout {
-                            spacing: 10px * Palette.scale;
+                            spacing: 12px * Palette.scale;
                             alignment: start;
 
                             Text {
@@ -238,6 +243,29 @@ export component StoreWindow inherits Window {
                                 font-weight: 700;
                                 letter-spacing: 4px * Palette.scale;
                                 vertical-alignment: center;
+                            }
+
+                            if taskActive : HorizontalLayout {
+                                spacing: 8px * Palette.scale;
+                                alignment: start;
+
+                                Rectangle {
+                                    width: 12px * Palette.scale;
+                                    height: 12px * Palette.scale;
+                                    border-radius: 6px * Palette.scale;
+                                    border-width: 2px * Palette.scale;
+                                    border-color: taskType == "db" ? #38bdf8 : (taskType == "uninstall" ? #f43f5e : #a78bfa);
+                                    y: (parent.height - self.height) / 2;
+                                }
+
+                                Text {
+                                    text: taskStatusText;
+                                    color: taskType == "db" ? #38bdf8 : (taskType == "uninstall" ? #f43f5e : #c084fc);
+                                    font-size: 10px * Palette.scale;
+                                    font-weight: 700;
+                                    letter-spacing: 1px * Palette.scale;
+                                    vertical-alignment: center;
+                                }
                             }
                         }
 
@@ -1173,70 +1201,7 @@ export component StoreWindow inherits Window {
             }
         }
 
-        // Loading overlay for updating the database (declared last to render on top)
-        if databaseUpdating : Rectangle {
-            background: #090d16cc;
-
-            TouchArea {
-                // block all interactions while updating
-            }
-
-            VerticalLayout {
-                alignment: center;
-                spacing: 16px * Palette.scale;
-
-                // Loading Circle Spinner
-                Rectangle {
-                    width: 36px * Palette.scale;
-                    height: 36px * Palette.scale;
-                    border-radius: 18px * Palette.scale;
-                    border-width: 3px * Palette.scale;
-                    border-color: #38bdf8;
-                    x: (parent.width - self.width) / 2;
-                }
-
-                Text {
-                    text: "UPDATING DATABASE...";
-                    font-size: 11px * Palette.scale;
-                    font-weight: 800;
-                    letter-spacing: 2px * Palette.scale;
-                    color: #38bdf8;
-                    horizontal-alignment: center;
-                }
-            }
-        }
-
-        // Install loading overlay
-        if installing : Rectangle {
-            background: #090d16cc;
-
-            TouchArea {
-                // block all interactions while installing
-            }
-
-            VerticalLayout {
-                alignment: center;
-                spacing: 16px * Palette.scale;
-
-                Rectangle {
-                    width: 36px * Palette.scale;
-                    height: 36px * Palette.scale;
-                    border-radius: 18px * Palette.scale;
-                    border-width: 3px * Palette.scale;
-                    border-color: #a78bfa;
-                    x: (parent.width - self.width) / 2;
-                }
-
-                Text {
-                    text: root.installProgressText;
-                    font-size: 11px * Palette.scale;
-                    font-weight: 800;
-                    letter-spacing: 2px * Palette.scale;
-                    color: #a78bfa;
-                    horizontal-alignment: center;
-                }
-            }
-        }
+        // Full-screen blocking overlays removed: progress is shown in top bar next to HPR STORE title.
 
         // Install result dialog
         if installResultVisible : Rectangle {

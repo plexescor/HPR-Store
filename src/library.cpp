@@ -72,7 +72,10 @@ extern "C" HPR_EXPORT void showUi(lua_State* L)
 {
     slint::invoke_from_event_loop([]
     {
-        if (!gui) return;
+        if (!gui)
+        {
+            gui = std::make_unique<GUI>();
+        }
         gui->show();
     });
 }
