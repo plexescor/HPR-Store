@@ -8,7 +8,7 @@ It allows browsing, filtering, installing, and deleting extensions and themes fo
 > **This is not a standalone application.** HPR-Store is itself an HPR extension — a plugin you drop into HPR's extension folder. Once installed, it acts as a store manager that lets you browse and install other extensions and themes from within HPR's UI.
 
 > [!NOTE]
-> **HPR Version Compatibility:** HPR-Store requires **HPR v0.9.7 or higher**. Older versions of HPR lack necessary extension manager APIs (such as `HPR.reloadMyself` and dynamic native library loading support).
+> **HPR Version Compatibility:** HPR-Store requires **HPR v0.9.7 or higher**. Older versions of HPR lack necessary extension manager APIs (such as `HPR.reloadMyself`).
 
 ---
 
