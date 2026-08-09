@@ -205,6 +205,9 @@ void RegistryManager::rebuildPageOrder()
     {
         const auto& item = allItems[i];
         
+        // Hide HPR Store itself from the normal catalog view
+        if (item.id == "hpr-store") continue;
+
         // Filter by Type (ALL/EXTENSION/THEME)
         bool matchesType = (activeTypeFilter == 0 ||
             (activeTypeFilter == 1 && item.type == StoreItemType::EXTENSION) ||
