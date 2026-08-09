@@ -28,9 +28,10 @@ Before HPR-Store can work, you **must** enable the following option in HPR's set
 No building required if you grab a pre-built release.
 
 1. **Download** the latest release zip from the [Releases](https://github.com/plexescor/HPR-Store/releases) page.
-2. **Extract** the zip — you will get a folder named `HPR-Store/` containing three files:
+2. **Extract** the zip — you will get a folder named `HPR-Store/` containing four files:
    - `HPR-Store.lua`
-   - `libHPR-Store.so` (Linux) **or** `HPR-Store.dll` (Windows)
+   - `libHPR-Store.so` (Linux)
+   - `HPR-Store.dll` (Windows)
    - `registry.json`
 3. **Copy** the entire `HPR-Store/` folder to HPR's extension directory:
    - **Linux:** `~/.config/HPR/extensions/`
