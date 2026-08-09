@@ -190,6 +190,7 @@ export component StoreWindow inherits Window {
     callback refresh-clicked();
     callback install-item-clicked(string);
     callback uninstall-item-clicked(string);
+    callback upgrade-item-clicked(string);
     callback next-page-clicked();
     callback prev-page-clicked();
     callback go-to-page-clicked(string);  // C++ does int parsing & clamping
@@ -857,14 +858,42 @@ export component StoreWindow inherits Window {
                                         }
                                     }
 
-                                    InstallButton {
-                                        label: item.installed ? "DELETE" : "INSTALL";
-                                        is-delete: item.installed;
-                                        clicked => {
-                                            if (item.installed) {
-                                                root.uninstall-item-clicked(item.id);
-                                            } else {
-                                                root.install-item-clicked(item.id);
+                                    HorizontalLayout {
+                                        spacing: 6px * Palette.scale;
+                                        alignment: end;
+
+                                        if item.upgradable : Rectangle {
+                                            width: 72px * Palette.scale;
+                                            height: 28px * Palette.scale;
+                                            border-radius: 5px * Palette.scale;
+                                            background: #f59e0b;
+                                            y: (parent.height - self.height) / 2;
+
+                                            ta-upgrade := TouchArea {
+                                                clicked => { root.upgrade-item-clicked(item.id); }
+                                            }
+
+                                            Text {
+                                                text: "UPGRADE";
+                                                color: #000000;
+                                                font-size: 9px * Palette.scale;
+                                                font-weight: 800;
+                                                letter-spacing: 1px * Palette.scale;
+                                                horizontal-alignment: center;
+                                                vertical-alignment: center;
+                                                opacity: ta-upgrade.has-hover ? 0.8 : 1.0;
+                                            }
+                                        }
+
+                                        InstallButton {
+                                            label: item.installed ? "DELETE" : "INSTALL";
+                                            is-delete: item.installed;
+                                            clicked => {
+                                                if (item.installed) {
+                                                    root.uninstall-item-clicked(item.id);
+                                                } else {
+                                                    root.install-item-clicked(item.id);
+                                                }
                                             }
                                         }
                                     }
@@ -897,14 +926,42 @@ export component StoreWindow inherits Window {
                                         clicked => { root.showDetailView = false; }
                                     }
 
-                                    InstallButton {
-                                        label: selectedItem.installed ? "DELETE" : "INSTALL";
-                                        is-delete: selectedItem.installed;
-                                        clicked => {
-                                            if (selectedItem.installed) {
-                                                root.uninstall-item-clicked(selectedItem.id);
-                                            } else {
-                                                root.install-item-clicked(selectedItem.id);
+                                    HorizontalLayout {
+                                        spacing: 8px * Palette.scale;
+                                        alignment: end;
+
+                                        if selectedItem.upgradable : Rectangle {
+                                            width: 90px * Palette.scale;
+                                            height: 30px * Palette.scale;
+                                            border-radius: 6px * Palette.scale;
+                                            background: #f59e0b;
+                                            y: (parent.height - self.height) / 2;
+
+                                            ta-detail-upgrade := TouchArea {
+                                                clicked => { root.upgrade-item-clicked(selectedItem.id); }
+                                            }
+
+                                            Text {
+                                                text: "UPGRADE";
+                                                color: #000000;
+                                                font-size: 10px * Palette.scale;
+                                                font-weight: 800;
+                                                letter-spacing: 1.5px * Palette.scale;
+                                                horizontal-alignment: center;
+                                                vertical-alignment: center;
+                                                opacity: ta-detail-upgrade.has-hover ? 0.8 : 1.0;
+                                            }
+                                        }
+
+                                        InstallButton {
+                                            label: selectedItem.installed ? "DELETE" : "INSTALL";
+                                            is-delete: selectedItem.installed;
+                                            clicked => {
+                                                if (selectedItem.installed) {
+                                                    root.uninstall-item-clicked(selectedItem.id);
+                                                } else {
+                                                    root.install-item-clicked(selectedItem.id);
+                                                }
                                             }
                                         }
                                     }

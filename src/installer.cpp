@@ -43,9 +43,9 @@ std::filesystem::path Installer::storeBasePath()
 #endif
 }
 
-std::unordered_map<std::string, std::string> Installer::loadInstalledItems()
+std::unordered_map<std::string, InstalledRecord> Installer::loadInstalledItems()
 {
-    std::unordered_map<std::string, std::string> installed;
+    std::unordered_map<std::string, InstalledRecord> installed;
     auto base = storeBasePath();
     if (base.empty()) return installed;
 
@@ -63,10 +63,22 @@ std::unordered_map<std::string, std::string> Installer::loadInstalledItems()
             {
                 for (auto& el : j.items())
                 {
+                    InstalledRecord rec;
                     if (el.value().is_string())
                     {
-                        installed[el.key()] = el.value().get<std::string>();
+                        // Backward-compat: old format was plain string folderName
+                        rec.folder = el.value().get<std::string>();
+                        rec.version = "";
                     }
+                    else if (el.value().is_object())
+                    {
+                        if (el.value().contains("folder") && el.value()["folder"].is_string())
+                            rec.folder = el.value()["folder"].get<std::string>();
+                        if (el.value().contains("version") && el.value()["version"].is_string())
+                            rec.version = el.value()["version"].get<std::string>();
+                    }
+                    if (!rec.folder.empty())
+                        installed[el.key()] = rec;
                 }
             }
         }
@@ -78,7 +90,7 @@ std::unordered_map<std::string, std::string> Installer::loadInstalledItems()
     return installed;
 }
 
-void Installer::saveInstalledItems(const std::unordered_map<std::string, std::string>& items)
+void Installer::saveInstalledItems(const std::unordered_map<std::string, InstalledRecord>& items)
 {
     auto base = storeBasePath();
     if (base.empty()) return;
@@ -90,7 +102,10 @@ void Installer::saveInstalledItems(const std::unordered_map<std::string, std::st
         nlohmann::json j = nlohmann::json::object();
         for (const auto& pair : items)
         {
-            j[pair.first] = pair.second;
+            j[pair.first] = {
+                {"folder",  pair.second.folder},
+                {"version", pair.second.version}
+            };
         }
         std::ofstream file(dbPath, std::ios::trunc);
         if (file.is_open())
@@ -114,7 +129,7 @@ bool Installer::uninstall(const std::string& id, StoreItemType type)
         return false;
     }
 
-    auto folderName = it->second;
+    auto folderName = it->second.folder;
     auto base = hprBasePath();
     if (base.empty()) return false;
 
@@ -480,12 +495,130 @@ InstallResult Installer::install(const StoreItem& item, std::function<void(std::
         return result;
     }
 
-    // ── 7. Update local installed database ────────────────────────────────────
+    // ── 7. Update local installed database (with version) ─────────────────────
     auto installed = loadInstalledItems();
-    installed[item.id] = targetFolderName;
+    installed[item.id] = InstalledRecord{ targetFolderName, item.version };
     saveInstalledItems(installed);
 
     // ── 8. Cleanup ────────────────────────────────────────────────────────────
+    cleanup();
+
+    result.success = true;
+    return result;
+}
+
+InstallResult Installer::upgrade(const StoreItem& item, std::function<void(std::string)> progressCallback)
+{
+    InstallResult result;
+
+    if (item.downloadUrl.empty())
+    {
+        result.errorMessage = "No download URL available for this item";
+        return result;
+    }
+
+    // Look up the existing install folder
+    auto installed = loadInstalledItems();
+    auto it = installed.find(item.id);
+    if (it == installed.end())
+    {
+        result.errorMessage = "Item is not currently installed";
+        return result;
+    }
+    const std::string existingFolder = it->second.folder;
+
+    auto base = hprBasePath();
+    if (base.empty())
+    {
+        result.errorMessage = "Could not determine HPR config directory";
+        return result;
+    }
+
+    std::filesystem::path destDir;
+    if (item.type == StoreItemType::THEME)
+        destDir = base / "themes" / existingFolder;
+    else
+        destDir = base / "extensions" / existingFolder;
+
+    // ── 1. Create temp dir ────────────────────────────────────────────────────
+    progressCallback("DOWNLOADING UPDATE...");
+    std::filesystem::path tempBase;
+    try
+    {
+        tempBase = std::filesystem::temp_directory_path() / ("hpr-upgrade-" + item.id);
+        std::filesystem::create_directories(tempBase);
+    }
+    catch (const std::exception& e)
+    {
+        result.errorMessage = "Failed to create temp directory: " + std::string(e.what());
+        return result;
+    }
+
+    auto cleanup = [&]()
+    {
+        progressCallback("CLEANING UP...");
+        try { std::filesystem::remove_all(tempBase); }
+        catch (...) {}
+    };
+
+    // ── 2. Download ───────────────────────────────────────────────────────────
+    std::string dlError;
+    auto archivePath = downloadArchive(item.downloadUrl, tempBase, dlError);
+    if (archivePath.empty())
+    {
+        result.errorMessage = dlError;
+        cleanup();
+        return result;
+    }
+
+    // ── 3. Extract ────────────────────────────────────────────────────────────
+    progressCallback("EXTRACTING UPDATE...");
+    auto extractedDir = tempBase / "extracted";
+    std::filesystem::create_directories(extractedDir);
+
+    std::string extractError;
+    if (!extractArchive(archivePath, extractedDir, extractError))
+    {
+        result.errorMessage = extractError;
+        cleanup();
+        return result;
+    }
+
+    // ── 4. Find install root ──────────────────────────────────────────────────
+    progressCallback("LOCATING ROOT FOLDER...");
+    std::string findError;
+    auto installRoot = findInstallRoot(extractedDir, item.type, findError);
+    if (installRoot.empty())
+    {
+        result.errorMessage = findError;
+        cleanup();
+        return result;
+    }
+
+    // ── 5. Merge-copy new files over existing install dir ─────────────────────
+    // Uses overwrite_existing so new/changed files replace old ones.
+    // Files that exist ONLY in destDir (e.g. user config) are NOT deleted.
+    progressCallback("MERGING FILES...");
+    try
+    {
+        std::filesystem::create_directories(destDir);
+        std::filesystem::copy(
+            installRoot, destDir,
+            std::filesystem::copy_options::recursive |
+            std::filesystem::copy_options::overwrite_existing);
+        std::cout << "[Installer] Upgraded: " << destDir << std::endl;
+    }
+    catch (const std::exception& e)
+    {
+        result.errorMessage = "Failed to merge upgrade files: " + std::string(e.what());
+        cleanup();
+        return result;
+    }
+
+    // ── 6. Update version in installed database ───────────────────────────────
+    installed[item.id] = InstalledRecord{ existingFolder, item.version };
+    saveInstalledItems(installed);
+
     cleanup();
 
     result.success = true;

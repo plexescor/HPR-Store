@@ -11,6 +11,13 @@ struct InstallResult
     std::string errorMessage;
 };
 
+// Record stored per item in installed.json
+struct InstalledRecord
+{
+    std::string folder;
+    std::string version;
+};
+
 class Installer
 {
 public:
@@ -20,13 +27,19 @@ public:
         const StoreItem& item,
         std::function<void(std::string)> progressCallback = [](std::string){});
 
+    // Upgrade an already-installed item by merge-copying new files over the existing folder.
+    // Preserves files that exist only in the destination (e.g. user config files).
+    static InstallResult upgrade(
+        const StoreItem& item,
+        std::function<void(std::string)> progressCallback = [](std::string){});
+
     // Uninstall an item from HPR and update database.
     static bool uninstall(const std::string& id, StoreItemType type);
 
-    // Installed status database helpers
+    // Installed status database helpers (new schema: id → {folder, version})
     static std::filesystem::path storeBasePath();
-    static std::unordered_map<std::string, std::string> loadInstalledItems();
-    static void saveInstalledItems(const std::unordered_map<std::string, std::string>& items);
+    static std::unordered_map<std::string, InstalledRecord> loadInstalledItems();
+    static void saveInstalledItems(const std::unordered_map<std::string, InstalledRecord>& items);
 
     // Determine the HPR base config path (~/.config/HPR/ or %APPDATA%/HPR/HPR_Config/)
     static std::filesystem::path hprBasePath();

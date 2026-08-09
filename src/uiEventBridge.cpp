@@ -62,7 +62,7 @@ static std::string sanitizeMarkdownForSlint(const std::string& input)
     return result;
 }
 
-static StoreItem_S toSlintStoreItem(const StoreItem& item, const std::unordered_map<std::string, std::string>& installedItems)
+static StoreItem_S toSlintStoreItem(const StoreItem& item, const std::unordered_map<std::string, InstalledRecord>& installedItems)
 {
     StoreItem_S s;
     s.id = slint::SharedString(item.id);
@@ -94,7 +94,16 @@ static StoreItem_S toSlintStoreItem(const StoreItem& item, const std::unordered_
     s.download_count = item.downloadCount;
     s.star_count = item.starCount;
     s.last_updated = slint::SharedString(item.lastUpdated);
-    s.installed = (installedItems.find(item.id) != installedItems.end());
+
+    auto installedIt = installedItems.find(item.id);
+    s.installed = (installedIt != installedItems.end());
+
+    // upgradable: installed but version mismatch (both non-empty)
+    s.upgradable = false;
+    if (s.installed && !item.version.empty() && !installedIt->second.version.empty())
+    {
+        s.upgradable = (installedIt->second.version != item.version);
+    }
 
     return s;
 }
@@ -183,14 +192,31 @@ void UIEventBridge::triggerRefresh()
 {
     if (!registryManager) return;
 
+    // ── Step 1: Read local registry immediately so UI appears fast ────────────
     std::thread([this]()
     {
-        std::cout << "[UIEventBridge] showUi triggered: reading local database..." << std::endl;
         registryManager->readLocalRegistry();
         currentPage = 0;
 
         slint::invoke_from_event_loop([this]()
         {
+            updateStoreItemsUI();
+        });
+
+        // ── Step 2: In the background, fetch remote registry and re-render ───
+        slint::invoke_from_event_loop([this]()
+        {
+            ui->set_taskActive(true);
+            ui->set_taskType(slint::SharedString("db"));
+            ui->set_taskStatusText(slint::SharedString("SYNCING..."));
+        });
+
+        registryManager->updateDatabase();
+        currentPage = 0;
+
+        slint::invoke_from_event_loop([this]()
+        {
+            ui->set_taskActive(false);
             updateStoreItemsUI();
         });
     }).detach();
@@ -445,6 +471,61 @@ void UIEventBridge::setupEvents()
                     if (std::string(currentSelected.id) == item.id)
                     {
                         currentSelected.installed = true;
+                        ui->set_selectedItem(currentSelected);
+                    }
+                }
+            });
+        }).detach();
+    });
+
+    ui->on_upgrade_item_clicked([this](slint::SharedString itemId)
+    {
+        if (!registryManager) return;
+
+        auto maybeItem = registryManager->getItemById(std::string(itemId));
+        if (!maybeItem)
+        {
+            std::cerr << "[UIEventBridge] Upgrade: item not found: " << itemId.data() << std::endl;
+            return;
+        }
+
+        std::cout << "[UIEventBridge] Upgrade requested for: " << itemId.data() << std::endl;
+        ui->set_installing(true);
+        ui->set_isUninstall(false);
+        ui->set_installProgressText("UPGRADING...");
+        ui->set_taskActive(true);
+        ui->set_taskType(slint::SharedString("install"));
+        ui->set_taskStatusText(slint::SharedString("UPGRADING..."));
+        ui->set_installResultVisible(false);
+
+        std::thread([this, item = *maybeItem]()
+        {
+            InstallResult result = Installer::upgrade(item, [this](std::string progress) {
+                slint::invoke_from_event_loop([this, progress]() {
+                    ui->set_installProgressText(slint::SharedString(progress));
+                    ui->set_taskStatusText(slint::SharedString(progress));
+                });
+            });
+
+            slint::invoke_from_event_loop([this, result, item]()
+            {
+                ui->set_installing(false);
+                ui->set_taskActive(false);
+                ui->set_installSuccess(result.success);
+                if (result.success) {
+                    ui->set_installErrorMessage(slint::SharedString("Item upgraded successfully."));
+                } else {
+                    ui->set_installErrorMessage(slint::SharedString(result.errorMessage));
+                }
+                ui->set_installResultVisible(true);
+
+                if (result.success)
+                {
+                    updateStoreItemsUI();
+                    auto currentSelected = ui->get_selectedItem();
+                    if (std::string(currentSelected.id) == item.id)
+                    {
+                        currentSelected.upgradable = false;
                         ui->set_selectedItem(currentSelected);
                     }
                 }
