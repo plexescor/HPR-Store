@@ -59,32 +59,7 @@ Leftover `.old` files from a previous update are cleaned up automatically on nex
 
 ## 📦 Publishing an Extension or Theme
 
-Want your extension listed in HPR-Store? Submit a PR!
-
-1. Create a GitHub release with a `.zip` file containing your extension or theme folder.
-2. Fork this repository, add your entry to `registry.json`, and open a Pull Request.
-3. Once merged, all HPR-Store users will see your extension on their next database refresh.
-
-### `registry.json` Entry Schema
-
-| Field | Type | Required | Description |
-|-------|------|----------|-------------|
-| `id` | string | ✅ | Unique kebab-case identifier (e.g. `"my-extension"`) |
-| `name` | string | ✅ | Display name shown in the store |
-| `author` | string | ✅ | Your name or GitHub username |
-| `authorGithub` | string | — | Link to your GitHub profile |
-| `description` | string | ✅ | Short one-line description |
-| `longDescription` | string | — | Full Markdown description shown in the detail view |
-| `version` | string | ✅ | Current version string (e.g. `"0.2"`) |
-| `downloadUrl` | string | ✅ | Direct URL to the release `.zip` archive |
-| `sourceUrl` | string | — | URL to the source code repository |
-| `type` | string | ✅ | `"EXTENSION"` or `"THEME"` |
-| `tags` | array | — | Searchable tag strings |
-| `supportedHPRVersions` | array | — | List of compatible HPR version strings |
-| `previewImages` | array | — | URLs to preview images shown in the UI carousel |
-| `downloadCount` | int | — | Download counter (maintained by the registry) |
-| `starCount` | int | — | Star counter (used for sort-by-stars) |
-| `lastUpdated` | string | — | ISO date of last update (e.g. `"2026-08-09"`) |
+Want your extension or theme listed in HPR-Store? See [PUBLISHING.md](./PUBLISHING.md) for the full submission rules and procedure.
 
 ---
 
@@ -114,30 +89,11 @@ cmake --build . --config Release
 
 The post-build step automatically copies the compiled library, `HPR-Store.lua`, and `registry.json` to HPR's active extensions directory.
 
-### Dependencies (Windows)
-- **Visual Studio 2022** / MSVC C++ Desktop Development tools
-- **CMake** (version >= 3.21)
-- **vcpkg** (for OpenSSL and zlib static linking)
-- libarchive is fetched automatically via CMake FetchContent
+### Building on Windows
 
-```bash
-# Setup vcpkg (one-time)
-cd C:\
-git clone https://github.com/microsoft/vcpkg.git
-cd vcpkg
-bootstrap-vcpkg.bat
-vcpkg install openssl:x64-windows-static zlib:x64-windows-static
-```
+> [!WARNING]
+> Building on Windows is currently error-prone and glitchy. Detailed steps will be added in a future update. For now, use the pre-built release from the [Releases](https://github.com/plexescor/HPR-Store/releases) page.
 
-```bash
-# Build
-mkdir build && cd build
-cmake .. -DCMAKE_BUILD_TYPE=Release ^
-  -DCMAKE_TOOLCHAIN_FILE=C:/vcpkg/scripts/buildsystems/vcpkg.cmake ^
-  -DVCPKG_TARGET_TRIPLET=x64-windows-static ^
-  -DCMAKE_PREFIX_PATH="C:/Program Files/Slint-cpp 1.16.1"
-cmake --build . --config Release
-```
 
 ---
 
