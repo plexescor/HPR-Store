@@ -1,9 +1,9 @@
-#include <ixwebsocket/IXNetSystem.h>
 #include "GUI.hpp"
 #include "lua.hpp"
 #include "sol.hpp"
 #include <future>
 #include <iostream>
+#include <ixwebsocket/IXNetSystem.h>
 #include <memory>
 
 #ifdef _WIN32
@@ -16,7 +16,7 @@
 static std::unique_ptr<GUI> gui;
 static lua_State *g_L = nullptr;
 static std::mutex g_luaMutex;
-static std::string g_hprStoreVersion = "0.1";
+static std::string g_hprStoreVersion = "0.2";
 
 std::string getHprStoreCurrentVersion() { return g_hprStoreVersion; }
 
@@ -238,6 +238,7 @@ std::string getHprVersionFromLua() {
         }
       }
     }
-  } catch (...) {}
+  } catch (...) {
+  }
   return "";
 }
