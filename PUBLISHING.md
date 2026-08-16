@@ -11,7 +11,7 @@ This document explains how to submit your extension or theme to HPR-Store so tha
 3. **Once merged**, all HPR-Store users will see your extension on their next database refresh.
 
 > [!IMPORTANT]
-> **Review times:** HPR-Store is maintained by a single developer who reads every submission personally. For open-source extensions, the Lua and C++ source code will be reviewed directly. For closed-source extensions, review may take significantly longer — the maintainer may need to observe runtime behaviour or decompile the binary before approving. Please be patient.
+> **Review times:** I personally read every submission — I'm the sole developer maintaining HPR-Store. For open-source extensions, I review the Lua and C++ source code directly. For closed-source extensions, review may take significantly longer — I may need to observe runtime behaviour or decompile the binary before approving. Please be patient.
 
 ---
 
@@ -44,7 +44,7 @@ Submissions must not contain viruses, spyware, ransomware, cryptocurrency miners
 
 ### Rule 4 — Open Source Policy
 
-Open source is **not required** — it is your choice. However, closed-source extensions with vague or unclear descriptions of their behaviour face a **significantly higher chance of rejection**, as the maintainer cannot verify what the extension does without additional effort. If your code is public, include `sourceUrl` in your entry — it greatly speeds up review.
+Open source is **not required** — it is your choice. However, closed-source extensions with vague or unclear descriptions of their behaviour face a **significantly higher chance of rejection**, as I cannot verify what the extension does without significant additional effort. If your code is public, include `sourceUrl` in your entry — it greatly speeds up my review.
 
 ---
 
@@ -80,7 +80,7 @@ Each distinct extension or theme gets exactly **one entry** in `registry.json`. 
 
 ### Rule 10 — Publishing Cooldown
 
-A single author may not publish **more than one new extension within any 10-day rolling window**. This limit exists because HPR-Store has a single maintainer who must personally review every submission. PRs that violate this cooldown will be held until the window has passed.
+A single author may not publish **more than one new extension within any 10-day rolling window**. I am the sole maintainer and must personally review every submission — this limit keeps the queue manageable. PRs that violate this cooldown will be held until the window has passed.
 
 > [!NOTE]
 > The cooldown applies only to **new extension submissions**. Updating an existing entry (bumping version, fixing a download URL, etc.) has **no cooldown**.

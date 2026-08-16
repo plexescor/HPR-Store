@@ -92,7 +92,7 @@ The post-build step automatically copies the compiled library, `HPR-Store.lua`, 
 ### Building on Windows
 
 > [!WARNING]
-> Building on Windows is currently error-prone and glitchy. Detailed steps will be added in a future update. For now, use the pre-built release from the [Releases](https://github.com/plexescor/HPR-Store/releases) page.
+> Building on Windows is currently error-prone and glitchy. I'll be adding detailed steps in a future update. For now, please use the pre-built release from the [Releases](https://github.com/plexescor/HPR-Store/releases) page.
 
 
 ---
