@@ -72,9 +72,12 @@ Do not impersonate other authors, projects, or HPR branding in any metadata fiel
 
 ---
 
-### Rule 9 — One Entry Per Extension
+### Rule 9 — No Duplicate Listings for the Same Extension
 
-Each distinct extension or theme gets exactly **one entry** in `registry.json`. Do not submit duplicate entries for the same extension under different IDs.
+You may not submit duplicate entries for the exact same codebase or extension project (e.g. listing your same theme twice under different IDs or names). 
+
+> [!NOTE]
+> This does **not** prevent different developers from publishing competing extensions that do the same thing (for example, another author is fully allowed to publish their own version of an "idle detection" extension). It only prevents duplicate spam listings of the same project.
 
 ---
 

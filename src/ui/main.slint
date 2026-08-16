@@ -183,6 +183,15 @@ export component StoreWindow inherits Window {
     in property <string> installProgressText: "INSTALLING...";
     in property <bool> isUninstall: false;
 
+    // Native Warning Dialog state
+    in-out property <bool> nativeWarningVisible: false;
+    in-out property <string> nativeWarningItemId: "";
+
+    // Version Warning Dialog state
+    in-out property <bool> versionWarningVisible: false;
+    in-out property <string> versionWarningItemId: "";
+    in-out property <string> versionWarningMessage: "";
+
     // Page jump state (private to UI)
     property <string> pageJumpText: "";
     property <bool> pageJumpInvalid: false;
@@ -192,7 +201,10 @@ export component StoreWindow inherits Window {
 
     callback refresh-clicked();
     callback install-item-clicked(string);
+    callback confirm-install-clicked(string);
+    callback confirm-version-install-clicked(string);
     callback uninstall-item-clicked(string);
+    callback open-url-clicked(string);
     callback upgrade-item-clicked(string);
     callback self-upgrade-clicked();
     callback next-page-clicked();
@@ -836,6 +848,26 @@ export component StoreWindow inherits Window {
                                                 vertical-alignment: center;
                                             }
                                         }
+
+                                        if item.compatible : Rectangle {
+                                            background: #10b98115;
+                                            border-width: 1px * Palette.scale;
+                                            border-color: #10b98140;
+                                            border-radius: 4px * Palette.scale;
+                                            height: 18px * Palette.scale;
+                                            width: compTxt.preferred-width + 10px * Palette.scale;
+                                            y: (parent.height - self.height) / 2;
+
+                                            compTxt := Text {
+                                                text: "COMPATIBLE";
+                                                font-size: 8px * Palette.scale;
+                                                font-weight: 800;
+                                                letter-spacing: 1px * Palette.scale;
+                                                color: #10b981;
+                                                horizontal-alignment: center;
+                                                vertical-alignment: center;
+                                            }
+                                        }
                                     }
 
                                     Text {
@@ -1069,7 +1101,14 @@ export component StoreWindow inherits Window {
                                         if selectedItem.author-github != "" : Text {
                                             text: "(" + selectedItem.author-github + ")";
                                             font-size: 11px * Palette.scale;
-                                            color: #38bdf8;
+                                            color: githubTa.has-hover ? #7dd3fc : #38bdf8;
+
+                                            githubTa := TouchArea {
+                                                mouse-cursor: pointer;
+                                                clicked => {
+                                                    root.open-url-clicked(selectedItem.author-github);
+                                                }
+                                            }
                                         }
                                     }
                                 }
@@ -1268,15 +1307,29 @@ export component StoreWindow inherits Window {
                                         if selectedItem.download-url != "" : Text {
                                             text: "Download URL: " + selectedItem.download-url;
                                             font-size: 11px * Palette.scale;
-                                            color: Palette.text-secondary;
+                                            color: downloadTa.has-hover ? #38bdf8 : Palette.text-secondary;
                                             wrap: word-wrap;
+
+                                            downloadTa := TouchArea {
+                                                mouse-cursor: pointer;
+                                                clicked => {
+                                                    root.open-url-clicked(selectedItem.download-url);
+                                                }
+                                            }
                                         }
 
                                         if selectedItem.source-url != "" : Text {
                                             text: "Source Code: " + selectedItem.source-url;
                                             font-size: 11px * Palette.scale;
-                                            color: Palette.text-secondary;
+                                            color: sourceTa.has-hover ? #38bdf8 : Palette.text-secondary;
                                             wrap: word-wrap;
+
+                                            sourceTa := TouchArea {
+                                                mouse-cursor: pointer;
+                                                clicked => {
+                                                    root.open-url-clicked(selectedItem.source-url);
+                                                }
+                                            }
                                         }
                                     }
                                 }
@@ -1370,6 +1423,242 @@ export component StoreWindow inherits Window {
 
                             Text {
                                 text: "OK";
+                                font-size: 9px * Palette.scale;
+                                font-weight: 800;
+                                letter-spacing: 1.5px * Palette.scale;
+                                color: #ffffff;
+                                horizontal-alignment: center;
+                                vertical-alignment: center;
+                            }
+                        }
+                    }
+                }
+            }
+        }
+
+        // Version Warning Dialog
+        if versionWarningVisible : Rectangle {
+            background: #000000cc;
+
+            TouchArea {
+                // block click-through
+            }
+
+            Rectangle {
+                width: 440px * Palette.scale;
+                height: 260px * Palette.scale;
+                x: (parent.width - self.width) / 2;
+                y: (parent.height - self.height) / 2;
+                background: Palette.card-background;
+                border-radius: 12px * Palette.scale;
+                border-width: 1px * Palette.scale;
+                border-color: Palette.card-border;
+
+                VerticalLayout {
+                    padding: 28px * Palette.scale;
+                    spacing: 14px * Palette.scale;
+                    alignment: space-between;
+
+                    VerticalLayout {
+                        spacing: 6px * Palette.scale;
+
+                        Text {
+                            text: "⚠️ VERSION WARNING";
+                            font-size: 9px * Palette.scale;
+                            font-weight: 800;
+                            letter-spacing: 2.5px * Palette.scale;
+                            color: #eab308; // Warning yellow
+                            horizontal-alignment: center;
+                        }
+
+                        Text {
+                            text: "Incompatible Version Selected";
+                            font-size: 18px * Palette.scale;
+                            font-weight: 800;
+                            color: Palette.text-primary;
+                            horizontal-alignment: center;
+                        }
+                    }
+
+                    Text {
+                        text: versionWarningMessage;
+                        font-size: 11px * Palette.scale;
+                        font-weight: 500;
+                        color: Palette.text-secondary;
+                        wrap: word-wrap;
+                        horizontal-alignment: center;
+                    }
+
+                    HorizontalLayout {
+                        alignment: center;
+                        spacing: 16px * Palette.scale;
+
+                        // Cancel button
+                        v-cancel-btn := Rectangle {
+                            width: 130px * Palette.scale;
+                            height: 32px * Palette.scale;
+                            border-radius: 6px * Palette.scale;
+                            background: v-cancel-ta.pressed ? Palette.input-bg-press : (v-cancel-ta.has-hover ? Palette.input-bg-hover : Palette.input-bg);
+                            border-width: 1px * Palette.scale;
+                            border-color: Palette.input-border;
+
+                            v-cancel-ta := TouchArea {
+                                mouse-cursor: pointer;
+                                clicked => {
+                                    root.versionWarningVisible = false;
+                                }
+                            }
+
+                            Text {
+                                text: "CANCEL";
+                                font-size: 9px * Palette.scale;
+                                font-weight: 800;
+                                letter-spacing: 1.5px * Palette.scale;
+                                color: Palette.text-secondary;
+                                horizontal-alignment: center;
+                                vertical-alignment: center;
+                            }
+                        }
+
+                        // Proceed button
+                        v-proceed-btn := Rectangle {
+                            width: 130px * Palette.scale;
+                            height: 32px * Palette.scale;
+                            border-radius: 6px * Palette.scale;
+                            background: v-proceed-ta.pressed
+                                ? @linear-gradient(135deg, #0284c7 0%, #0369a1 100%)
+                                : v-proceed-ta.has-hover
+                                    ? @linear-gradient(135deg, #7dd3fc 0%, #38bdf8 100%)
+                                    : @linear-gradient(135deg, #38bdf8 0%, #0284c7 100%);
+
+                            v-proceed-ta := TouchArea {
+                                mouse-cursor: pointer;
+                                clicked => {
+                                    root.versionWarningVisible = false;
+                                    root.confirm-version-install-clicked(root.versionWarningItemId);
+                                }
+                            }
+
+                            Text {
+                                text: "PROCEED";
+                                font-size: 9px * Palette.scale;
+                                font-weight: 800;
+                                letter-spacing: 1.5px * Palette.scale;
+                                color: #ffffff;
+                                horizontal-alignment: center;
+                                vertical-alignment: center;
+                            }
+                        }
+                    }
+                }
+            }
+        }
+
+        // Native library security warning dialog
+        if nativeWarningVisible : Rectangle {
+            background: #000000cc;
+
+            TouchArea {
+                // block click-through
+            }
+
+            Rectangle {
+                width: 440px * Palette.scale;
+                height: 300px * Palette.scale;
+                x: (parent.width - self.width) / 2;
+                y: (parent.height - self.height) / 2;
+                background: Palette.card-background;
+                border-radius: 12px * Palette.scale;
+                border-width: 1px * Palette.scale;
+                border-color: Palette.card-border;
+
+                VerticalLayout {
+                    padding: 28px * Palette.scale;
+                    spacing: 14px * Palette.scale;
+                    alignment: space-between;
+
+                    VerticalLayout {
+                        spacing: 6px * Palette.scale;
+
+                        Text {
+                            text: "⚠️ SECURITY WARNING";
+                            font-size: 9px * Palette.scale;
+                            font-weight: 800;
+                            letter-spacing: 2.5px * Palette.scale;
+                            color: #ef4444;
+                            horizontal-alignment: center;
+                        }
+
+                        Text {
+                            text: "Native Extension Selected";
+                            font-size: 18px * Palette.scale;
+                            font-weight: 800;
+                            color: Palette.text-primary;
+                            horizontal-alignment: center;
+                        }
+                    }
+
+                    Text {
+                        text: "This extension requires native library execution (.dll or .so). Native libraries bypass the Lua sandbox and run with full system access. Dangers:\n• System Access: Can read, write, or delete any files on your computer.\n• Network & Activity: Can perform unauthorized web requests.\n\nOnly proceed if you fully trust the author.";
+                        font-size: 11px * Palette.scale;
+                        font-weight: 500;
+                        color: Palette.text-secondary;
+                        wrap: word-wrap;
+                        horizontal-alignment: center;
+                    }
+
+                    HorizontalLayout {
+                        alignment: center;
+                        spacing: 16px * Palette.scale;
+
+                        // Cancel button
+                        cancel-btn := Rectangle {
+                            width: 130px * Palette.scale;
+                            height: 32px * Palette.scale;
+                            border-radius: 6px * Palette.scale;
+                            background: cancel-ta.pressed ? Palette.input-bg-press : (cancel-ta.has-hover ? Palette.input-bg-hover : Palette.input-bg);
+                            border-width: 1px * Palette.scale;
+                            border-color: Palette.input-border;
+
+                            cancel-ta := TouchArea {
+                                mouse-cursor: pointer;
+                                clicked => {
+                                    root.nativeWarningVisible = false;
+                                }
+                            }
+
+                            Text {
+                                text: "CANCEL";
+                                font-size: 9px * Palette.scale;
+                                font-weight: 800;
+                                letter-spacing: 1.5px * Palette.scale;
+                                color: Palette.text-secondary;
+                                horizontal-alignment: center;
+                                vertical-alignment: center;
+                            }
+                        }
+
+                        // Proceed button
+                        proceed-btn := Rectangle {
+                            width: 130px * Palette.scale;
+                            height: 32px * Palette.scale;
+                            border-radius: 6px * Palette.scale;
+                            background: proceed-ta.pressed
+                                ? @linear-gradient(135deg, #0284c7 0%, #0369a1 100%)
+                                : proceed-ta.has-hover
+                                    ? @linear-gradient(135deg, #7dd3fc 0%, #38bdf8 100%)
+                                    : @linear-gradient(135deg, #38bdf8 0%, #0284c7 100%);
+
+                            proceed-ta := TouchArea {
+                                mouse-cursor: pointer;
+                                clicked => {
+                                    root.nativeWarningVisible = false;
+                                    root.confirm-install-clicked(root.nativeWarningItemId);
+                                }
+                            }
+
+                            Text {
+                                text: "PROCEED";
                                 font-size: 9px * Palette.scale;
                                 font-weight: 800;
                                 letter-spacing: 1.5px * Palette.scale;

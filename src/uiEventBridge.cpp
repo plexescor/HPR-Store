@@ -4,9 +4,17 @@
 #include <iostream>
 #include <string>
 
+#ifdef _WIN32
+#include <windows.h>
+#include <shellapi.h>
+#else
+#include <cstdlib>
+#endif
+
 extern std::string getHprStoreCurrentVersion();
 extern void reloadMyselfViaLua();
 extern void refreshExtensionsViaLua();
+extern std::string getHprVersionFromLua();
 #include <vector>
 #include <memory>
 #include <thread>
@@ -67,9 +75,41 @@ static std::string sanitizeMarkdownForSlint(const std::string& input)
     return result;
 }
 
+static std::string stripLeadingV(std::string s) {
+    if (!s.empty() && (s[0] == 'v' || s[0] == 'V')) {
+        return s.substr(1);
+    }
+    return s;
+}
+
+static bool isVersionCompatible(const std::string& currentHprVer, const std::vector<std::string>& supportedVersions) {
+    if (supportedVersions.empty()) {
+        return false;
+    }
+    std::string cleanHpr = stripLeadingV(currentHprVer);
+    for (const auto& v : supportedVersions) {
+        if (stripLeadingV(v) == cleanHpr) {
+            return true;
+        }
+    }
+    return false;
+}
+
+static std::string formatVersionMessage(const std::string& currentHprVer, const std::vector<std::string>& supportedVersions) {
+    std::string cleanHpr = stripLeadingV(currentHprVer);
+    std::string supportedStr;
+    for (size_t i = 0; i < supportedVersions.size(); ++i) {
+        if (i > 0) supportedStr += ", ";
+        supportedStr += stripLeadingV(supportedVersions[i]);
+    }
+    return "Current HPR version is " + cleanHpr + " but this extension only supports versions (" + supportedStr + ")";
+}
+
 static StoreItem_S toSlintStoreItem(const StoreItem& item, const std::unordered_map<std::string, InstalledRecord>& installedItems)
 {
     StoreItem_S s;
+    std::string currentHprVer = getHprVersionFromLua();
+    s.compatible = isVersionCompatible(currentHprVer, item.supportedHPRVersions);
     s.id = slint::SharedString(item.id);
     s.name = slint::SharedString(item.name);
     s.author = slint::SharedString(item.author);
@@ -494,18 +534,8 @@ void UIEventBridge::setupEvents()
         }).detach();
     });
 
-    ui->on_install_item_clicked([this](slint::SharedString itemId)
+    auto performInstall = [this](const StoreItem& item)
     {
-        if (!registryManager) return;
-
-        auto maybeItem = registryManager->getItemById(std::string(itemId));
-        if (!maybeItem)
-        {
-            std::cerr << "[UIEventBridge] Install: item not found: " << itemId.data() << std::endl;
-            return;
-        }
-
-        std::cout << "[UIEventBridge] Install requested for: " << itemId.data() << std::endl;
         ui->set_installing(true);
         ui->set_isUninstall(false);
         ui->set_installProgressText("STARTING INSTALLATION...");
@@ -514,7 +544,7 @@ void UIEventBridge::setupEvents()
         ui->set_taskStatusText(slint::SharedString("DOWNLOADING..."));
         ui->set_installResultVisible(false);
 
-        std::thread([this, item = *maybeItem]()
+        std::thread([this, item]()
         {
             InstallResult result = Installer::install(item, [this](std::string progress) {
                 slint::invoke_from_event_loop([this, progress]() {
@@ -546,6 +576,88 @@ void UIEventBridge::setupEvents()
                     }
                 }
             });
+        }).detach();
+    };
+
+    auto checkAndShowNativeWarning = [this, performInstall](const StoreItem& item) {
+        bool isNative = false;
+        for (const auto& tag : item.tags) {
+            if (tag == "native") {
+                isNative = true;
+                break;
+            }
+        }
+        if (isNative) {
+            ui->set_nativeWarningItemId(slint::SharedString(item.id));
+            ui->set_nativeWarningVisible(true);
+        } else {
+            performInstall(item);
+        }
+    };
+
+    ui->on_install_item_clicked([this, performInstall, checkAndShowNativeWarning](slint::SharedString itemId)
+    {
+        if (!registryManager) return;
+
+        auto maybeItem = registryManager->getItemById(std::string(itemId));
+        if (!maybeItem)
+        {
+            std::cerr << "[UIEventBridge] Install: item not found: " << itemId.data() << std::endl;
+            return;
+        }
+
+        std::cout << "[UIEventBridge] Install requested for: " << itemId.data() << std::endl;
+
+        // 1. Version compatibility check
+        std::string currentHprVer = getHprVersionFromLua();
+        if (!isVersionCompatible(currentHprVer, maybeItem->supportedHPRVersions))
+        {
+            ui->set_versionWarningItemId(itemId);
+            ui->set_versionWarningMessage(slint::SharedString(formatVersionMessage(currentHprVer, maybeItem->supportedHPRVersions)));
+            ui->set_versionWarningVisible(true);
+            return;
+        }
+
+        // 2. Native check
+        checkAndShowNativeWarning(*maybeItem);
+    });
+
+    ui->on_confirm_version_install_clicked([this, checkAndShowNativeWarning](slint::SharedString itemId)
+    {
+        if (!registryManager) return;
+
+        auto maybeItem = registryManager->getItemById(std::string(itemId));
+        if (!maybeItem) return;
+
+        // Version warning bypassed -> proceed to native warning check
+        checkAndShowNativeWarning(*maybeItem);
+    });
+
+    ui->on_confirm_install_clicked([this, performInstall](slint::SharedString itemId)
+    {
+        if (!registryManager) return;
+
+        auto maybeItem = registryManager->getItemById(std::string(itemId));
+        if (!maybeItem) return;
+
+        performInstall(*maybeItem);
+    });
+
+    ui->on_open_url_clicked([this](slint::SharedString url)
+    {
+        std::string urlStr = std::string(url);
+        if (urlStr.empty()) return;
+
+        std::cout << "[UIEventBridge] Opening URL: " << urlStr << std::endl;
+        std::thread([urlStr]()
+        {
+#ifdef _WIN32
+            ShellExecuteA(NULL, "open", urlStr.c_str(), NULL, NULL, SW_SHOWNORMAL);
+#else
+            std::string cmd = "xdg-open \"" + urlStr + "\" &";
+            int ret = std::system(cmd.c_str());
+            (void)ret;
+#endif
         }).detach();
     });
 

@@ -221,3 +221,23 @@ extern "C" HPR_EXPORT void showUi(lua_State *L) {
     gui->show();
   });
 }
+
+std::string getHprVersionFromLua() {
+  std::lock_guard<std::mutex> lock(g_luaMutex);
+  if (!g_L) {
+    return "";
+  }
+  try {
+    sol::state_view lua(g_L);
+    if (lua["HPR"].valid()) {
+      sol::protected_function getVerFn = lua["HPR"]["getHPRVersion"];
+      if (getVerFn.valid()) {
+        sol::protected_function_result res = getVerFn();
+        if (res.valid()) {
+          return res;
+        }
+      }
+    }
+  } catch (...) {}
+  return "";
+}
