@@ -13,6 +13,7 @@
 
 extern std::string getHprStoreCurrentVersion();
 extern void reloadMyselfViaLua();
+extern void quitHprViaLua();
 extern void refreshExtensionsViaLua();
 extern std::string getHprVersionFromLua();
 #include <vector>
@@ -105,7 +106,7 @@ static std::string formatVersionMessage(const std::string& currentHprVer, const 
     return "Current HPR version is " + cleanHpr + " but this extension only supports versions (" + supportedStr + ")";
 }
 
-static StoreItem_S toSlintStoreItem(const StoreItem& item, const std::unordered_map<std::string, InstalledRecord>& installedItems)
+static StoreItem_S toSlintStoreItem(const StoreItem& item, const std::unordered_map<std::string, InstalledRecord>& installedItems, bool remoteSynced = false)
 {
     StoreItem_S s;
     std::string currentHprVer = getHprVersionFromLua();
@@ -143,12 +144,12 @@ static StoreItem_S toSlintStoreItem(const StoreItem& item, const std::unordered_
     auto installedIt = installedItems.find(item.id);
     s.installed = (installedIt != installedItems.end());
 
-    // Special check for HPR Store itself
+    // Special check for HPR Store itself (only upgradable if remote pull succeeded and version differs)
     if (item.id == "hpr-store")
     {
         s.installed = true;
         std::string currentVer = getHprStoreCurrentVersion();
-        s.upgradable = (!item.version.empty() && item.version != currentVer);
+        s.upgradable = (remoteSynced && !item.version.empty() && item.version != currentVer);
     }
     else
     {
@@ -175,20 +176,28 @@ void UIEventBridge::updateStoreItemsUI()
     if (!registryManager) return;
 
     auto installedItems = Installer::loadInstalledItems();
+    bool remoteSynced = registryManager && registryManager->hasFetchedRemote;
 
     auto pageItems = registryManager->getPage(currentPage);
     auto itemsModel = std::make_shared<slint::VectorModel<StoreItem_S>>();
     for (const auto& item : pageItems)
-        itemsModel->push_back(toSlintStoreItem(item, installedItems));
+        itemsModel->push_back(toSlintStoreItem(item, installedItems, remoteSynced));
 
     ui->set_storeItems(itemsModel);
 
-    // Check if HPR Store itself has an update in registryManager
-    auto maybeSelf = registryManager->getItemById("hpr-store");
-    if (maybeSelf)
+    // Check if HPR Store itself has an update in registryManager (only after confirmed remote pull)
+    if (remoteSynced)
     {
-        std::string currentVer = getHprStoreCurrentVersion();
-        ui->set_selfUpgradable(!maybeSelf->version.empty() && maybeSelf->version != currentVer);
+        auto maybeSelf = registryManager->getItemById("hpr-store");
+        if (maybeSelf)
+        {
+            std::string currentVer = getHprStoreCurrentVersion();
+            ui->set_selfUpgradable(!maybeSelf->version.empty() && maybeSelf->version != currentVer);
+        }
+        else
+        {
+            ui->set_selfUpgradable(false);
+        }
     }
     else
     {
@@ -271,23 +280,83 @@ void UIEventBridge::triggerRefresh()
             updateStoreItemsUI();
         });
 
-        // ── Step 2: In the background, fetch remote registry and re-render ───
-        slint::invoke_from_event_loop([this]()
+        // ── Step 2: In the background, fetch remote registry if network is enabled ───
+        if (registryManager->config.enableNetwork)
         {
-            ui->set_taskActive(true);
-            ui->set_taskType(slint::SharedString("db"));
-            ui->set_taskStatusText(slint::SharedString("SYNCING..."));
+            slint::invoke_from_event_loop([this]()
+            {
+                ui->set_taskActive(true);
+                ui->set_taskType(slint::SharedString("db"));
+                ui->set_taskStatusText(slint::SharedString("SYNCING..."));
+            });
+
+            registryManager->updateDatabase();
+            currentPage = 0;
+
+            slint::invoke_from_event_loop([this]()
+            {
+                ui->set_taskActive(false);
+                updateStoreItemsUI();
+            });
+        }
+    }).detach();
+}
+
+void UIEventBridge::performSelfUpgrade()
+{
+    std::cout << "[UIEventBridge] Performing self-upgrade for HPR Store..." << std::endl;
+    auto maybeItem = registryManager ? registryManager->getItemById("hpr-store") : std::nullopt;
+    if (!maybeItem) return;
+
+    ui->set_installing(true);
+    ui->set_isUninstall(false);
+    ui->set_installProgressText("SELF UPGRADING...");
+    ui->set_taskActive(true);
+    ui->set_taskType(slint::SharedString("install"));
+    ui->set_taskStatusText(slint::SharedString("SELF UPGRADING..."));
+    ui->set_installResultVisible(false);
+
+    std::thread([this, item = *maybeItem]()
+    {
+        InstallResult result = Installer::selfUpgrade(item, [this](std::string progress) {
+            slint::invoke_from_event_loop([this, progress]() {
+                ui->set_installProgressText(slint::SharedString(progress));
+                ui->set_taskStatusText(slint::SharedString(progress));
+            });
         });
 
-        registryManager->updateDatabase();
-        currentPage = 0;
-
-        slint::invoke_from_event_loop([this]()
+        slint::invoke_from_event_loop([this, result]()
         {
+            ui->set_installing(false);
             ui->set_taskActive(false);
-            updateStoreItemsUI();
+            if (result.success)
+            {
+#ifndef _WIN32
+                std::cout << "[UIEventBridge] Self-upgrade successful on Linux! Quitting HPR via quitUi..." << std::endl;
+                quitHprViaLua();
+#else
+                std::cout << "[UIEventBridge] Self-upgrade successful on Windows! Triggering HPR.reloadMyself()..." << std::endl;
+                reloadMyselfViaLua();
+#endif
+            }
+            else
+            {
+                ui->set_installSuccess(false);
+                ui->set_installErrorMessage(slint::SharedString(result.errorMessage));
+                ui->set_installResultVisible(true);
+            }
         });
     }).detach();
+}
+
+void UIEventBridge::requestSelfUpgrade()
+{
+#ifndef _WIN32
+    std::cout << "[UIEventBridge] Self-upgrade requested on Linux — showing restart warning modal." << std::endl;
+    ui->set_linuxSelfUpdateWarningVisible(true);
+#else
+    performSelfUpgrade();
+#endif
 }
 
 void UIEventBridge::setupEvents()
@@ -296,53 +365,28 @@ void UIEventBridge::setupEvents()
 
     ui->on_self_upgrade_clicked([this]()
     {
-        std::cout << "[UIEventBridge] Topbar UPDATE clicked for HPR Store." << std::endl;
-        auto maybeItem = registryManager ? registryManager->getItemById("hpr-store") : std::nullopt;
-        if (!maybeItem) return;
+        requestSelfUpgrade();
+    });
 
-        ui->set_installing(true);
-        ui->set_isUninstall(false);
-        ui->set_installProgressText("SELF UPGRADING...");
-        ui->set_taskActive(true);
-        ui->set_taskType(slint::SharedString("install"));
-        ui->set_taskStatusText(slint::SharedString("SELF UPGRADING..."));
-        ui->set_installResultVisible(false);
-
-        std::thread([this, item = *maybeItem]()
-        {
-            InstallResult result = Installer::selfUpgrade(item, [this](std::string progress) {
-                slint::invoke_from_event_loop([this, progress]() {
-                    ui->set_installProgressText(slint::SharedString(progress));
-                    ui->set_taskStatusText(slint::SharedString(progress));
-                });
-            });
-
-            slint::invoke_from_event_loop([this, result]()
-            {
-                ui->set_installing(false);
-                ui->set_taskActive(false);
-                if (result.success)
-                {
-                    std::cout << "[UIEventBridge] Self-upgrade successful! Triggering HPR.reloadMyself()..." << std::endl;
-                    reloadMyselfViaLua();
-                }
-                else
-                {
-                    ui->set_installSuccess(false);
-                    ui->set_installErrorMessage(slint::SharedString(result.errorMessage));
-                    ui->set_installResultVisible(true);
-                }
-            });
-        }).detach();
+    ui->on_confirm_self_upgrade_clicked([this]()
+    {
+        performSelfUpgrade();
     });
 
     ui->on_refresh_clicked([this]()
     {
-        std::cout << "[UIEventBridge] Update Database clicked. Fetching remote updates..." << std::endl;
+        std::cout << "[UIEventBridge] Update Database clicked." << std::endl;
         ui->set_databaseUpdating(true);
         ui->set_taskActive(true);
         ui->set_taskType(slint::SharedString("db"));
-        ui->set_taskStatusText(slint::SharedString("UPDATING DB..."));
+        if (registryManager && !registryManager->config.enableNetwork)
+        {
+            ui->set_taskStatusText(slint::SharedString("RELOADING LOCAL..."));
+        }
+        else
+        {
+            ui->set_taskStatusText(slint::SharedString("UPDATING DB..."));
+        }
 
         std::thread([this]()
         {
@@ -675,41 +719,7 @@ void UIEventBridge::setupEvents()
         // Special handling for HPR Store self-update
         if (std::string(itemId) == "hpr-store")
         {
-            std::cout << "[UIEventBridge] Self-upgrade requested for HPR Store." << std::endl;
-            ui->set_installing(true);
-            ui->set_isUninstall(false);
-            ui->set_installProgressText("SELF UPGRADING...");
-            ui->set_taskActive(true);
-            ui->set_taskType(slint::SharedString("install"));
-            ui->set_taskStatusText(slint::SharedString("SELF UPGRADING..."));
-            ui->set_installResultVisible(false);
-
-            std::thread([this, item = *maybeItem]()
-            {
-                InstallResult result = Installer::selfUpgrade(item, [this](std::string progress) {
-                    slint::invoke_from_event_loop([this, progress]() {
-                        ui->set_installProgressText(slint::SharedString(progress));
-                        ui->set_taskStatusText(slint::SharedString(progress));
-                    });
-                });
-
-                slint::invoke_from_event_loop([this, result]()
-                {
-                    ui->set_installing(false);
-                    ui->set_taskActive(false);
-                    if (result.success)
-                    {
-                        std::cout << "[UIEventBridge] Self-upgrade successful! Triggering HPR.reloadMyself()..." << std::endl;
-                        reloadMyselfViaLua();
-                    }
-                    else
-                    {
-                        ui->set_installSuccess(false);
-                        ui->set_installErrorMessage(slint::SharedString(result.errorMessage));
-                        ui->set_installResultVisible(true);
-                    }
-                });
-            }).detach();
+            requestSelfUpgrade();
             return;
         }
 

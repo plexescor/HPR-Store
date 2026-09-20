@@ -730,13 +730,13 @@ std::filesystem::path Installer::getSelfExtensionDir()
     // 1. Primary: Use OS APIs to inspect exact loaded module path
     void (*pSelfDir)() = &Installer::cleanupOldFiles;
 #ifndef _WIN32
-    Dl_info info;
+    Dl_info info = {};
     if (dladdr((const void*)pSelfDir, &info) && info.dli_fname)
     {
         auto path = std::filesystem::path(info.dli_fname).parent_path();
         if (std::filesystem::exists(path))
         {
-            std::cout << "[Installer] getSelfExtensionDir: Resolved via OS API (dladdr): " << path << std::endl;
+            std::cout << "[Installer] getSelfExtensionDir: Resolved via OS API (dladdr): " << path.string() << std::endl;
             return path;
         }
     }
@@ -751,7 +751,7 @@ std::filesystem::path Installer::getSelfExtensionDir()
         auto winPath = std::filesystem::path(path).parent_path();
         if (std::filesystem::exists(winPath))
         {
-            std::cout << "[Installer] getSelfExtensionDir: Resolved via OS API (GetModuleFileNameW): " << winPath << std::endl;
+            std::cout << "[Installer] getSelfExtensionDir: Resolved via OS API (GetModuleFileNameW): " << winPath.string() << std::endl;
             return winPath;
         }
     }
@@ -765,7 +765,7 @@ std::filesystem::path Installer::getSelfExtensionDir()
     if (!base.empty())
     {
         auto fallbackPath = base / "extensions" / folderName;
-        std::cout << "[Installer] getSelfExtensionDir: Resolved via installed.json fallback: " << fallbackPath << std::endl;
+        std::cout << "[Installer] getSelfExtensionDir: Resolved via installed.json fallback: " << fallbackPath.string() << std::endl;
         return fallbackPath;
     }
 
@@ -787,7 +787,7 @@ void Installer::cleanupOldFiles()
                 std::filesystem::remove(entry.path(), ec);
                 if (!ec)
                 {
-                    std::cout << "[Installer] Cleaned up leftover file: " << entry.path() << std::endl;
+                    std::cout << "[Installer] Cleaned up leftover file: " << entry.path().string() << std::endl;
                 }
             }
         }

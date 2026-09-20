@@ -7,7 +7,7 @@ This document explains how to submit your extension or theme to HPR-Store so tha
 ## Submission Procedure
 
 1. **Create a GitHub Release** with a `.zip` file containing your extension or theme folder.
-2. **Fork this repository**, add your entry to `registry.json`, and open a Pull Request.
+2. **Fork the registry repository** ([plexescor/HPR-Registry](https://github.com/plexescor/HPR-Registry)), add your entry to `registry.json`, and open a Pull Request.
 3. **Once merged**, all HPR-Store users will see your extension on their next database refresh.
 
 > [!IMPORTANT]

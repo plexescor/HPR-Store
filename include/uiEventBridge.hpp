@@ -18,6 +18,8 @@ class UIEventBridge
         void goPrevPage();
         void setSortMode(int mode);    // 0=none, 1=stars, 2=downloads
         void updatePaginationUI();
+        void requestSelfUpgrade();
+        void performSelfUpgrade();
 
     private:
         slint::ComponentHandle<StoreWindow> ui;

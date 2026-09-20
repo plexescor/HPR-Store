@@ -1,4 +1,5 @@
 #include "GUI.hpp"
+#include "installer.hpp"
 #include "lua.hpp"
 #include "sol.hpp"
 #include <future>
@@ -16,9 +17,51 @@
 static std::unique_ptr<GUI> gui;
 static lua_State *g_L = nullptr;
 static std::mutex g_luaMutex;
-static std::string g_hprStoreVersion = "0.2";
+static std::string g_hprStoreVersion = "0.3";
 
 std::string getHprStoreCurrentVersion() { return g_hprStoreVersion; }
+
+void quitHprViaLua() {
+  std::lock_guard<std::mutex> lock(g_luaMutex);
+  if (!g_L) {
+    std::cerr
+        << "[HPR-Store-Library] quitHprViaLua: lua_State pointer is null!"
+        << std::endl;
+    return;
+  }
+
+  std::cout << "[HPR-Store-Library] Calling HPR.quitUi() / "
+               "HPR.quitUi_E() via Lua state..."
+            << std::endl;
+  try {
+    sol::state_view lua(g_L);
+    if (lua["HPR"].valid()) {
+      sol::protected_function quitFn = lua["HPR"]["quitUi"];
+      if (!quitFn.valid()) {
+        quitFn = lua["HPR"]["quitUi_E"];
+      }
+
+      if (quitFn.valid()) {
+        sol::protected_function_result res = quitFn();
+        if (!res.valid()) {
+          sol::error err = res;
+          std::cerr << "[HPR-Store-Library] Lua quitUi error: "
+                    << err.what() << std::endl;
+        } else {
+          std::cout
+              << "[HPR-Store-Library] Lua quitUi triggered successfully."
+              << std::endl;
+        }
+      } else {
+        std::cerr << "[HPR-Store-Library] quitUi function not found in HPR table!"
+                  << std::endl;
+      }
+    }
+  } catch (const std::exception &e) {
+    std::cerr << "[HPR-Store-Library] Exception during Lua quitUi: "
+              << e.what() << std::endl;
+  }
+}
 
 void reloadMyselfViaLua() {
   std::lock_guard<std::mutex> lock(g_luaMutex);
@@ -214,6 +257,7 @@ extern "C" HPR_EXPORT void destroy(lua_State *L) {
 extern "C" HPR_EXPORT void showUi(lua_State *L) {
   g_L = L;
   ix::initNetSystem();
+  Installer::cleanupOldFiles();
   slint::invoke_from_event_loop([] {
     if (!gui) {
       gui = std::make_unique<GUI>();

@@ -1,5 +1,6 @@
 #pragma once
 #include "registryEntry.hpp"
+#include "configManager.hpp"
 #include <string>
 #include <vector>
 #include <unordered_set>
@@ -16,12 +17,18 @@ class RegistryManager
         ~RegistryManager();
 
     public:
-        // Local database path next to the library
+        // Config management
+        void loadConfig();
+
+        // Resolves the registry path based on config (custom local path if offline, or default)
+        std::filesystem::path resolveRegistryPath() const;
+
+        // Default local database path next to the library
         std::filesystem::path getLocalRegistryPath() const;
 
         // Normal browsing: read local file directly, shuffle, page through
         void readLocalRegistry();
-        void updateDatabase(); // Download remote registry and replace the local file
+        bool updateDatabase(); // Download remote registry or reload local file based on config
 
         // Sort mode only: full dataset in memory
         void sortItems(SortMode mode);
@@ -32,6 +39,8 @@ class RegistryManager
         std::optional<StoreItem> getItemById(const std::string& id) const;
 
     public:
+        StoreConfig config;
+        bool hasFetchedRemote = false;
         std::vector<StoreItem> items;        // Current page or sort window
         std::vector<StoreItem> allItems;     // Full dataset
         std::vector<int> pageOrder;          // Shuffled indices into allItems
@@ -45,7 +54,5 @@ class RegistryManager
     private:
         mutable std::mutex registryMutex;
         static constexpr std::string_view REGISTRY_URL =
-            "api.github.com";
-        static constexpr std::string_view REGISTRY_PATH =
-            "/repos/plexescor/HPR-Store/contents/registry.json";
+            "https://github.com/plexescor/HPR-Registry/releases/latest/download/registry.json";
 };

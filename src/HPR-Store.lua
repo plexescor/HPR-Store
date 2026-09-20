@@ -1,6 +1,6 @@
 HPR.extensionName = "HPR Store"
 HPR.authorName = "Plexescor"
-HPR.versionSupport = { "v0.9.7", "v0.9.8" }
+HPR.versionSupport = { "v0.9.7", "v0.9.8", "v0.9.9", "v0.9.10" }
 
 local initializer, err
 local destroy, err1
@@ -60,19 +60,7 @@ function init()
     HPR.log(HPR.extensionName, HPR.extensionName .. " Initialized")
     print("Initialized")
 
-    if (HPR.amICompatible ~= nil) then
-        if (HPR.amICompatible()) then
-            loadSharedLibrary()
-        end
-    else
-        HPR.log(HPR.extensionName, "You are using an incompatible version of HPR")
-        if (HPR.showUiPopup ~= nil) then
-            HPR.showUiPopup(HPR.extensionName .. ": You are using an incompatible version of HPR, Minimum Required: v0.9.7",
-            "OK", "OK", function(btn) end)
-        end
-    end
-
-
+    loadSharedLibrary()
 end
 
 function onTick()
@@ -80,7 +68,9 @@ function onTick()
 end
 
 function onExit()
-    destroy()
+    if destroy then
+        destroy()
+    end
 end
 
 function onAction()

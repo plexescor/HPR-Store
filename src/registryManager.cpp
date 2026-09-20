@@ -43,8 +43,33 @@ inline void from_json(const nlohmann::json& j, StoreItem& item) {
     if (j.contains("lastUpdated")) j.at("lastUpdated").get_to(item.lastUpdated);
 }
 
-RegistryManager::RegistryManager() = default;
+RegistryManager::RegistryManager()
+{
+    loadConfig();
+}
+
 RegistryManager::~RegistryManager() = default;
+
+void RegistryManager::loadConfig()
+{
+    config = ConfigManager::loadConfig();
+}
+
+std::filesystem::path RegistryManager::resolveRegistryPath() const
+{
+    if (!config.enableNetwork && !config.customLocalRegistryPath.empty())
+    {
+        std::filesystem::path customPath(config.customLocalRegistryPath);
+        if (std::filesystem::exists(customPath))
+        {
+            std::cout << "[RegistryManager] Using custom local registry path: " << customPath << std::endl;
+            return customPath;
+        }
+        std::cerr << "[RegistryManager] Custom registry path '" << config.customLocalRegistryPath
+                  << "' not found or inaccessible. Falling back to default local registry." << std::endl;
+    }
+    return getLocalRegistryPath();
+}
 
 std::optional<StoreItem> RegistryManager::getItemById(const std::string& id) const
 {
@@ -95,25 +120,26 @@ std::filesystem::path RegistryManager::getLocalRegistryPath() const
 
 void RegistryManager::readLocalRegistry()
 {
+    loadConfig();
     std::lock_guard<std::mutex> lock(registryMutex);
     allItems.clear();
     pageOrder.clear();
     seenIds.clear();
     totalItemCount = 0;
 
-    auto localPath = getLocalRegistryPath();
+    auto localPath = resolveRegistryPath();
     std::cout << "[RegistryManager] Loading local database from: " << localPath << std::endl;
 
     if (!std::filesystem::exists(localPath))
     {
-        std::cerr << "[RegistryManager] Local registry.json not found." << std::endl;
+        std::cerr << "[RegistryManager] Local registry.json not found at " << localPath << std::endl;
         return;
     }
 
     std::ifstream file(localPath);
     if (!file.is_open())
     {
-        std::cerr << "[RegistryManager] Failed to open local registry.json" << std::endl;
+        std::cerr << "[RegistryManager] Failed to open local registry.json at " << localPath << std::endl;
         return;
     }
 
@@ -133,18 +159,31 @@ void RegistryManager::readLocalRegistry()
     }
 }
 
-void RegistryManager::updateDatabase()
+bool RegistryManager::updateDatabase()
 {
+    loadConfig();
+
+    if (!config.enableNetwork)
+    {
+        std::cout << "[RegistryManager] Network is disabled in config.csv. Skipping remote fetch and reloading local registry." << std::endl;
+        readLocalRegistry();
+        return false;
+    }
+
     ix::HttpClient httpClient;
-    // Use raw.githubusercontent.com to bypass API 403 rate limits and fetch the raw file directly
-    std::string fullUrl = "https://raw.githubusercontent.com/plexescor/HPR-Store/main/registry.json";
+    std::string fullUrl = config.customRegistryUrl.empty() ? std::string(REGISTRY_URL) : config.customRegistryUrl;
 
     auto args = httpClient.createRequest();
-    args->extraHeaders["User-Agent"] = "HPR";
+    args->extraHeaders["User-Agent"] = "HPR-Store";
+    args->followRedirects = true;
+    args->maxRedirects = 10;
+    args->connectTimeout = 15;
+    args->transferTimeout = 30;
 
     std::cout << "[RegistryManager] Fetching remote update from: " << fullUrl << std::endl;
     auto response = httpClient.get(fullUrl, args);
 
+    bool success = false;
     if (response->statusCode == 200 && !response->body.empty())
     {
         auto localPath = getLocalRegistryPath();
@@ -154,6 +193,7 @@ void RegistryManager::updateDatabase()
             out << response->body;
             out.close();
             std::cout << "[RegistryManager] Successfully updated local database at " << localPath << std::endl;
+            success = true;
         }
         else
         {
@@ -168,6 +208,13 @@ void RegistryManager::updateDatabase()
 
     // Reload whichever file is now on disk
     readLocalRegistry();
+
+    if (success)
+    {
+        hasFetchedRemote = true;
+    }
+
+    return success;
 }
 
 void RegistryManager::sortItems(SortMode mode)
