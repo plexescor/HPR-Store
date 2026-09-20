@@ -25,31 +25,41 @@ if(WIN32)
     set(CMAKE_C_FLAGS "${CMAKE_C_FLAGS} /Oi-")
 endif()
 
-# ── MbedTLS (Windows only, before IXWebSocket fetch) ─────────────────────────
+include(FetchContent)
+
+# ── MbedTLS (tarball, has pre-generated files) ────────────────────────────────
 if(WIN32)
     set(ENABLE_TESTING  OFF CACHE BOOL "" FORCE)
     set(ENABLE_PROGRAMS OFF CACHE BOOL "" FORCE)
     set(ENABLE_DOCS     OFF CACHE BOOL "" FORCE)
-    if(EXISTS "${CMAKE_CURRENT_SOURCE_DIR}/external/mbedtls/CMakeLists.txt")
-        add_subdirectory(external/mbedtls EXCLUDE_FROM_ALL)
-    endif()
+    FetchContent_Declare(
+        mbedtls
+        URL https://github.com/Mbed-TLS/mbedtls/releases/download/mbedtls-3.6.2/mbedtls-3.6.2.tar.bz2
+        DOWNLOAD_EXTRACT_TIMESTAMP TRUE
+    )
+    FetchContent_MakeAvailable(mbedtls)
+    set(MBEDTLS_INCLUDE_DIRS "${mbedtls_SOURCE_DIR}/include" CACHE PATH "" FORCE)
+    set(MBEDTLS_LIBRARY    mbedtls    CACHE STRING "" FORCE)
+    set(MBEDX509_LIBRARY   mbedx509   CACHE STRING "" FORCE)
+    set(MBEDCRYPTO_LIBRARY mbedcrypto CACHE STRING "" FORCE)
 endif()
 
-# ── zlib (Windows only, before IXWebSocket fetch) ────────────────────────────
+# ── zlib (tarball) ────────────────────────────────────────────────────────────
 if(WIN32)
-    if(EXISTS "${CMAKE_CURRENT_SOURCE_DIR}/external/zlib/CMakeLists.txt")
-        add_subdirectory(external/zlib EXCLUDE_FROM_ALL)
-        set(ZLIB_LIBRARY zlibstatic CACHE STRING "" FORCE)
-        set(ZLIB_INCLUDE_DIR
-            "${CMAKE_CURRENT_SOURCE_DIR}/external/zlib"
-            "${CMAKE_CURRENT_BINARY_DIR}/external/zlib"
-            CACHE STRING "" FORCE)
-    endif()
+    FetchContent_Declare(
+        zlib
+        URL https://github.com/madler/zlib/releases/download/v1.3.1/zlib131.zip
+        DOWNLOAD_EXTRACT_TIMESTAMP TRUE
+    )
+    FetchContent_MakeAvailable(zlib)
+    set(ZLIB_LIBRARY    zlibstatic CACHE STRING "" FORCE)
+    set(ZLIB_INCLUDE_DIR
+        "${zlib_SOURCE_DIR}"
+        "${zlib_BINARY_DIR}"
+        CACHE STRING "" FORCE)
 endif()
 
 # ── IXWebSocket ───────────────────────────────────────────────────────────────
-include(FetchContent)
-
 FetchContent_Declare(
     ixwebsocket
     GIT_REPOSITORY https://github.com/machinezone/IXWebSocket.git
@@ -63,33 +73,25 @@ FetchContent_Declare(
 
 set(USE_TLS ON CACHE BOOL "" FORCE)
 if(WIN32)
-    # Tell IXWebSocket to use MbedTLS but skip its FindMbedTLS finder entirely
-    # by satisfying the variables it checks BEFORE MakeAvailable runs
-    set(USE_MBED_TLS  ON  CACHE BOOL "" FORCE)
-    set(USE_OPEN_SSL  OFF CACHE BOOL "" FORCE)
-
-    set(MBEDTLS_INCLUDE_DIRS
-        "${CMAKE_CURRENT_SOURCE_DIR}/external/mbedtls/include"
-        CACHE PATH "" FORCE)
-
-    # These are IMPORTED targets we create below — IXWebSocket's CMakeLists
-    # checks the cache vars but we also need real IMPORTED targets so the
-    # linker can resolve them at build time
-    set(MBEDTLS_LIBRARY   "mbedtls"   CACHE STRING "" FORCE)
-    set(MBEDX509_LIBRARY  "mbedx509"  CACHE STRING "" FORCE)
-    set(MBEDCRYPTO_LIBRARY "mbedcrypto" CACHE STRING "" FORCE)
+    set(USE_MBED_TLS   ON  CACHE BOOL "" FORCE)
+    set(USE_OPEN_SSL   OFF CACHE BOOL "" FORCE)
 endif()
 
 set(IXWEBSOCKET_INSTALL OFF CACHE BOOL "" FORCE)
 FetchContent_MakeAvailable(ixwebsocket nlohmann_json)
 
-# ── Wire MbedTLS targets into IXWebSocket after fetch ────────────────────────
-# FetchContent_MakeAvailable already ran IXWebSocket's CMakeLists which tried
-# find_package(MbedTLS). If it failed, we patch the link here directly.
-if(WIN32 AND TARGET ixwebsocket AND TARGET mbedtls)
-    target_link_libraries(ixwebsocket PRIVATE mbedtls mbedx509 mbedcrypto)
-    target_include_directories(ixwebsocket PRIVATE
-        "${CMAKE_CURRENT_SOURCE_DIR}/external/mbedtls/include")
+# ── Patch IXWebSocket to use our fetched targets ──────────────────────────────
+if(WIN32 AND TARGET ixwebsocket)
+    if(TARGET mbedtls)
+        target_link_libraries(ixwebsocket PRIVATE mbedtls mbedx509 mbedcrypto)
+        target_include_directories(ixwebsocket PRIVATE "${mbedtls_SOURCE_DIR}/include")
+    endif()
+    if(TARGET zlibstatic)
+        target_link_libraries(ixwebsocket PRIVATE zlibstatic)
+        target_include_directories(ixwebsocket PRIVATE
+            "${zlib_SOURCE_DIR}"
+            "${zlib_BINARY_DIR}")
+    endif()
 endif()
 
 # ── LibArchive ────────────────────────────────────────────────────────────────
@@ -100,10 +102,9 @@ if(NOT LibArchive_FOUND)
     set(ENABLE_TAR   OFF CACHE BOOL "" FORCE)
     set(ENABLE_CPIO  OFF CACHE BOOL "" FORCE)
     set(ENABLE_CAT   OFF CACHE BOOL "" FORCE)
+    set(HAVE_WCSCPY  1   CACHE INTERNAL "" FORCE)
+    set(HAVE_WCSLEN  1   CACHE INTERNAL "" FORCE)
     set(CMAKE_POLICY_VERSION_MINIMUM 3.5)
-    # These two are needed by libarchive's configure checks
-    set(HAVE_WCSCPY 1 CACHE INTERNAL "" FORCE)
-    set(HAVE_WCSLEN 1 CACHE INTERNAL "" FORCE)
     FetchContent_Declare(
         libarchive_src
         GIT_REPOSITORY https://github.com/libarchive/libarchive.git
@@ -176,9 +177,9 @@ add_custom_command(TARGET HPR-Store POST_BUILD
 
 add_custom_command(TARGET HPR-Store POST_BUILD
     COMMAND ${CMAKE_COMMAND} -E make_directory "${HPR_EXTENSION_DIR}"
-    COMMAND ${CMAKE_COMMAND} -E copy_if_different "$<TARGET_FILE:HPR-Store>"                        "${HPR_EXTENSION_DIR}/"
-    COMMAND ${CMAKE_COMMAND} -E copy_if_different "$<TARGET_FILE_DIR:HPR-Store>/HPR-Store.lua"      "${HPR_EXTENSION_DIR}/"
-    COMMAND ${CMAKE_COMMAND} -E copy_if_different "${CMAKE_CURRENT_SOURCE_DIR}/registry.json"       "${HPR_EXTENSION_DIR}/registry.json"
+    COMMAND ${CMAKE_COMMAND} -E copy_if_different "$<TARGET_FILE:HPR-Store>"                   "${HPR_EXTENSION_DIR}/"
+    COMMAND ${CMAKE_COMMAND} -E copy_if_different "$<TARGET_FILE_DIR:HPR-Store>/HPR-Store.lua" "${HPR_EXTENSION_DIR}/"
+    COMMAND ${CMAKE_COMMAND} -E copy_if_different "${CMAKE_CURRENT_SOURCE_DIR}/registry.json"  "${HPR_EXTENSION_DIR}/registry.json"
     COMMAND_EXPAND_LISTS
 )
 
