@@ -1,6 +1,6 @@
 HPR.extensionName = "HPR Store"
 HPR.authorName = "Plexescor"
-HPR.versionSupport = { "v0.9.7", "v0.9.8", "v0.9.9", "v0.9.10" }
+HPR.versionSupport = { "v0.9.7", "v0.9.8", "v0.9.9", "v0.9.10", "v0.9.11" }
 
 local initializer, err
 local destroy, err1
