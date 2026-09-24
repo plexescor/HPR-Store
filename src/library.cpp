@@ -17,7 +17,7 @@
 static std::unique_ptr<GUI> gui;
 static lua_State *g_L = nullptr;
 static std::mutex g_luaMutex;
-static std::string g_hprStoreVersion = "0.4";
+static std::string g_hprStoreVersion = "0.4.1";
 
 std::string getHprStoreCurrentVersion() { return g_hprStoreVersion; }
 
