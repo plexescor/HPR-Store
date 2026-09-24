@@ -1,6 +1,5 @@
 #include "registryManager.hpp"
 #include "network.hpp"
-#include <ixwebsocket/IXHttpClient.h>
 #include <nlohmann/json.hpp>
 #include <fstream>
 #include <filesystem>
@@ -170,27 +169,19 @@ bool RegistryManager::updateDatabase()
         return false;
     }
 
-    ix::HttpClient httpClient;
     std::string fullUrl = config.customRegistryUrl.empty() ? std::string(REGISTRY_URL) : config.customRegistryUrl;
 
-    auto args = httpClient.createRequest();
-    args->extraHeaders["User-Agent"] = "HPR-Store";
-    args->followRedirects = true;
-    args->maxRedirects = 10;
-    args->connectTimeout = 15;
-    args->transferTimeout = 30;
-
     std::cout << "[RegistryManager] Fetching remote update from: " << fullUrl << std::endl;
-    auto response = httpClient.get(fullUrl, args);
+    auto response = httpGet(fullUrl, "HPR-Store", 15, 30);
 
     bool success = false;
-    if (response->statusCode == 200 && !response->body.empty())
+    if (response.statusCode == 200 && !response.body.empty())
     {
         auto localPath = getLocalRegistryPath();
         std::ofstream out(localPath, std::ios::binary | std::ios::trunc);
         if (out.is_open())
         {
-            out << response->body;
+            out << response.body;
             out.close();
             std::cout << "[RegistryManager] Successfully updated local database at " << localPath << std::endl;
             success = true;
@@ -203,7 +194,7 @@ bool RegistryManager::updateDatabase()
     else
     {
         std::cerr << "[RegistryManager] Failed to fetch remote update. Status: "
-                  << response->statusCode << ", Error: " << response->errorMsg << std::endl;
+                  << response.statusCode << ", Error: " << response.errorMsg << std::endl;
     }
 
     // Reload whichever file is now on disk

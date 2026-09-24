@@ -4,7 +4,7 @@
 #include "sol.hpp"
 #include <future>
 #include <iostream>
-#include <ixwebsocket/IXNetSystem.h>
+#include <curl/curl.h>
 #include <memory>
 
 #ifdef _WIN32
@@ -205,7 +205,7 @@ static SlintInvokeFn g_hprInvoke = nullptr;
 
 extern "C" HPR_EXPORT void initialize(lua_State *L) {
   g_L = L;
-  ix::initNetSystem();
+  curl_global_init(CURL_GLOBAL_ALL);
   HMODULE hpr = GetModuleHandleA(nullptr);
   g_hprInvoke = (SlintInvokeFn)GetProcAddress(hpr, "HPR_invokeOnSlintThread");
 
@@ -235,8 +235,7 @@ extern "C" HPR_EXPORT void initialize(lua_State *L) {
 
 extern "C" HPR_EXPORT void destroy(lua_State *L) {
   g_L = L;
-  ix::uninitNetSystem();
-  ix::initNetSystem();
+  curl_global_cleanup();
   std::promise<void> done;
   auto fut = done.get_future();
 
@@ -256,7 +255,6 @@ extern "C" HPR_EXPORT void destroy(lua_State *L) {
 
 extern "C" HPR_EXPORT void showUi(lua_State *L) {
   g_L = L;
-  ix::initNetSystem();
   Installer::cleanupOldFiles();
   slint::invoke_from_event_loop([] {
     if (!gui) {

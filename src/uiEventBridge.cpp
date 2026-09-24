@@ -23,7 +23,7 @@ extern std::string getHprVersionFromLua();
 #include <cmath>
 #include <fstream>
 #include <filesystem>
-#include <ixwebsocket/IXHttpClient.h>
+#include "network.hpp"
 
 static std::string sanitizeMarkdownForSlint(const std::string& input)
 {
@@ -535,25 +535,23 @@ void UIEventBridge::setupEvents()
                     std::string filename = (lastSlash == std::string::npos) ? std::to_string(i) : url.substr(lastSlash + 1);
                     auto destPath = tempDir / filename;
 
-                    ix::HttpClient httpClient;
-                    auto args = httpClient.createRequest();
-                    args->extraHeaders["User-Agent"] = "HPR";
-
-                    auto response = httpClient.get(url, args);
-                    if (response->statusCode == 200 && !response->body.empty())
+                    auto response = httpGet(url, "HPR");
+                    if (response.statusCode == 200 && !response.body.empty())
                     {
                         std::ofstream out(destPath, std::ios::binary | std::ios::trunc);
                         if (out.is_open())
                         {
-                            out << response->body;
+                            out.write(response.body.data(), static_cast<std::streamsize>(response.body.size()));
                             out.close();
                             localPaths[i] = destPath.string();
                             std::cout << "[UIEventBridge] Previews: Downloaded " << url << " -> " << destPath << std::endl;
                             return;
                         }
                     }
-                    std::cerr << "[UIEventBridge] Previews: Failed downloading " << url << std::endl;
+                    std::cerr << "[UIEventBridge] Previews: Failed downloading " << url
+                              << " (HTTP " << response.statusCode << ")" << std::endl;
                 });
+
             }
 
             for (auto& t : downloadThreads) t.join();

@@ -1,6 +1,6 @@
 #include "installer.hpp"
 
-#include <ixwebsocket/IXHttpClient.h>
+#include "network.hpp"
 #include <archive.h>
 #include <archive_entry.h>
 #include <nlohmann/json.hpp>
@@ -186,52 +186,25 @@ std::filesystem::path Installer::downloadArchive(
     const std::filesystem::path& tempDir,
     std::string& outError)
 {
-    ix::HttpClient client;
-    auto args = client.createRequest();
-    args->extraHeaders["User-Agent"] = "HPR-Store";
-    args->followRedirects = true;
-    args->maxRedirects = 10;
-    args->connectTimeout = 30;
-    args->transferTimeout = 120;
-
-    std::cout << "[Installer] Downloading: " << url << std::endl;
-
-    auto response = client.get(url, args);
-    if (!response || response->statusCode != 200)
-    {
-        outError = "Download failed (HTTP " + std::to_string(response ? response->statusCode : 0) + ")";
-        if (response && !response->errorMsg.empty())
-            outError += ": " + response->errorMsg;
-        return {};
-    }
-
-    if (response->body.empty())
-    {
-        outError = "Downloaded archive is empty";
-        return {};
-    }
-
-    // Guess extension from URL
+    // Guess filename from URL
     std::string filename = "archive.zip";
     auto lastSlash = url.rfind('/');
     if (lastSlash != std::string::npos)
     {
         std::string name = url.substr(lastSlash + 1);
-        // Strip query string
         auto q = name.find('?');
         if (q != std::string::npos) name = name.substr(0, q);
         if (!name.empty()) filename = name;
     }
 
     auto archivePath = tempDir / filename;
-    std::ofstream out(archivePath, std::ios::binary | std::ios::trunc);
-    if (!out.is_open())
+
+    std::cout << "[Installer] Downloading: " << url << std::endl;
+
+    if (!httpGetToFile(url, archivePath.string(), outError))
     {
-        outError = "Failed to open temp file for writing: " + archivePath.string();
         return {};
     }
-    out.write(response->body.data(), static_cast<std::streamsize>(response->body.size()));
-    out.close();
 
     std::cout << "[Installer] Saved archive to: " << archivePath << std::endl;
     return archivePath;

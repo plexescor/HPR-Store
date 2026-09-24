@@ -21,78 +21,48 @@ add_library(lua_static STATIC ${LUA_SOURCES})
 if(UNIX)
     set_target_properties(lua_static PROPERTIES POSITION_INDEPENDENT_CODE ON)
 endif()
-if(WIN32)
+if(MSVC)
+    add_compile_options(/MP)
     set(CMAKE_C_FLAGS "${CMAKE_C_FLAGS} /Oi-")
 endif()
 
 include(FetchContent)
 
-# ── MbedTLS (tarball, has pre-generated files) ────────────────────────────────
+# ── libcurl (built from source) ───────────────────────────────────────────────
+set(BUILD_CURL_EXE    OFF CACHE BOOL "" FORCE)
+set(BUILD_TESTING     OFF CACHE BOOL "" FORCE)
+set(BUILD_EXAMPLES    OFF CACHE BOOL "" FORCE)
+set(BUILD_MISC_DOCS   OFF CACHE BOOL "" FORCE)
+set(ENABLE_CURL_MANUAL OFF CACHE BOOL "" FORCE)
+set(HTTP_ONLY         ON  CACHE BOOL "" FORCE)
+set(CURL_DISABLE_LDAP ON  CACHE BOOL "" FORCE)
+set(CURL_DISABLE_LDAPS ON CACHE BOOL "" FORCE)
+set(CURL_STATICLIB    ON  CACHE BOOL "" FORCE)
+set(CURL_USE_LIBPSL   OFF CACHE BOOL "" FORCE)
+set(CURL_USE_LIBSSH2  OFF CACHE BOOL "" FORCE)
+
 if(WIN32)
-    set(ENABLE_TESTING  OFF CACHE BOOL "" FORCE)
-    set(ENABLE_PROGRAMS OFF CACHE BOOL "" FORCE)
-    set(ENABLE_DOCS     OFF CACHE BOOL "" FORCE)
-    FetchContent_Declare(
-        mbedtls
-        URL https://github.com/Mbed-TLS/mbedtls/releases/download/mbedtls-3.6.2/mbedtls-3.6.2.tar.bz2
-        DOWNLOAD_EXTRACT_TIMESTAMP TRUE
-    )
-    FetchContent_MakeAvailable(mbedtls)
-    set(MBEDTLS_INCLUDE_DIRS "${mbedtls_SOURCE_DIR}/include" CACHE PATH "" FORCE)
-    set(MBEDTLS_LIBRARY    mbedtls    CACHE STRING "" FORCE)
-    set(MBEDX509_LIBRARY   mbedx509   CACHE STRING "" FORCE)
-    set(MBEDCRYPTO_LIBRARY mbedcrypto CACHE STRING "" FORCE)
+    set(CURL_USE_SCHANNEL  ON  CACHE BOOL "" FORCE)
+    set(CURL_USE_OPENSSL   OFF CACHE BOOL "" FORCE)
+    set(CURL_USE_MBEDTLS   OFF CACHE BOOL "" FORCE)
+else()
+    set(CURL_USE_OPENSSL   ON  CACHE BOOL "" FORCE)
 endif()
 
-# ── zlib (tarball) ────────────────────────────────────────────────────────────
-if(WIN32)
-    FetchContent_Declare(
-        zlib
-        URL https://github.com/madler/zlib/releases/download/v1.3.1/zlib131.zip
-        DOWNLOAD_EXTRACT_TIMESTAMP TRUE
-    )
-    FetchContent_MakeAvailable(zlib)
-    set(ZLIB_LIBRARY    zlibstatic CACHE STRING "" FORCE)
-    set(ZLIB_INCLUDE_DIR
-        "${zlib_SOURCE_DIR}"
-        "${zlib_BINARY_DIR}"
-        CACHE STRING "" FORCE)
-endif()
-
-# ── IXWebSocket ───────────────────────────────────────────────────────────────
 FetchContent_Declare(
-    ixwebsocket
-    GIT_REPOSITORY https://github.com/machinezone/IXWebSocket.git
-    GIT_TAG        v12.0.1
+    curl
+    URL https://github.com/curl/curl/releases/download/curl-8_11_1/curl-8.11.1.tar.xz
+    DOWNLOAD_EXTRACT_TIMESTAMP TRUE
 )
+
+# ── nlohmann/json ─────────────────────────────────────────────────────────────
 FetchContent_Declare(
     nlohmann_json
     URL https://github.com/nlohmann/json/releases/download/v3.11.3/json.tar.xz
     DOWNLOAD_EXTRACT_TIMESTAMP TRUE
 )
 
-set(USE_TLS ON CACHE BOOL "" FORCE)
-if(WIN32)
-    set(USE_MBED_TLS   ON  CACHE BOOL "" FORCE)
-    set(USE_OPEN_SSL   OFF CACHE BOOL "" FORCE)
-endif()
-
-set(IXWEBSOCKET_INSTALL OFF CACHE BOOL "" FORCE)
-FetchContent_MakeAvailable(ixwebsocket nlohmann_json)
-
-# ── Patch IXWebSocket to use our fetched targets ──────────────────────────────
-if(WIN32 AND TARGET ixwebsocket)
-    if(TARGET mbedtls)
-        target_link_libraries(ixwebsocket PRIVATE mbedtls mbedx509 mbedcrypto)
-        target_include_directories(ixwebsocket PRIVATE "${mbedtls_SOURCE_DIR}/include")
-    endif()
-    if(TARGET zlibstatic)
-        target_link_libraries(ixwebsocket PRIVATE zlibstatic)
-        target_include_directories(ixwebsocket PRIVATE
-            "${zlib_SOURCE_DIR}"
-            "${zlib_BINARY_DIR}")
-    endif()
-endif()
+FetchContent_MakeAvailable(curl nlohmann_json)
 
 # ── LibArchive ────────────────────────────────────────────────────────────────
 find_package(LibArchive QUIET)
@@ -131,13 +101,18 @@ endif()
 
 add_library(HPR-Store SHARED ${SOURCES})
 
-target_link_libraries(HPR-Store PRIVATE Slint::Slint)
-target_link_libraries(HPR-Store PRIVATE ixwebsocket)
+target_link_libraries(HPR-Store PRIVATE
+    Slint::Slint
+    lua_static
+    nlohmann_json::nlohmann_json
+    LibArchive::LibArchive
+)
 
 if(WIN32)
-    target_link_libraries(HPR-Store PRIVATE
-        mbedtls mbedx509 mbedcrypto
-        crypt32 ws2_32 secur32)
+    target_compile_definitions(HPR-Store PRIVATE CURL_STATICLIB)
+    target_link_libraries(HPR-Store PRIVATE libcurl_static ws2_32 crypt32 wldap32 normaliz)
+else()
+    target_link_libraries(HPR-Store PRIVATE libcurl_static)
 endif()
 
 if(EXISTS "${CMAKE_CURRENT_SOURCE_DIR}/src/ui/main.slint")
@@ -153,14 +128,9 @@ set_target_properties(HPR-Store PROPERTIES
 target_include_directories(lua_static PUBLIC external/lua/)
 target_include_directories(HPR-Store PUBLIC  external/lua/)
 target_include_directories(HPR-Store PRIVATE external/sol2/)
-
-target_link_libraries(HPR-Store PRIVATE
-    lua_static
-    nlohmann_json::nlohmann_json
-    LibArchive::LibArchive
-)
-
+target_include_directories(HPR-Store PRIVATE ${curl_SOURCE_DIR}/include)
 target_include_directories(HPR-Store PRIVATE include/)
+target_compile_definitions(HPR-Store PRIVATE LIBARCHIVE_STATIC)
 
 # ── Post-build copies ─────────────────────────────────────────────────────────
 if(WIN32)
