@@ -29,6 +29,8 @@ endif()
 include(FetchContent)
 
 # ── libcurl (built from source) ───────────────────────────────────────────────
+set(BUILD_STATIC_LIBS ON  CACHE BOOL "" FORCE)
+set(BUILD_SHARED_LIBS OFF CACHE BOOL "" FORCE)
 set(BUILD_CURL_EXE    OFF CACHE BOOL "" FORCE)
 set(BUILD_TESTING     OFF CACHE BOOL "" FORCE)
 set(BUILD_EXAMPLES    OFF CACHE BOOL "" FORCE)
@@ -64,14 +66,33 @@ FetchContent_Declare(
 
 FetchContent_MakeAvailable(curl nlohmann_json)
 
-# ── LibArchive ────────────────────────────────────────────────────────────────
+# ── LibArchive & zlib (deflate decompression) ─────────────────────────────────
 find_package(LibArchive QUIET)
 if(NOT LibArchive_FOUND)
     message(STATUS "libarchive not found via find_package, fetching from source...")
+    
+    # zlib is required by libarchive to decompress ZIP files (compression method 8: deflation)
+    set(ZLIB_BUILD_EXAMPLES OFF CACHE BOOL "" FORCE)
+    FetchContent_Declare(
+        zlib
+        GIT_REPOSITORY https://github.com/madler/zlib.git
+        GIT_TAG        v1.3.1
+    )
+    FetchContent_MakeAvailable(zlib)
+    if(TARGET zlibstatic)
+        set(ZLIB_INCLUDE_DIR "${zlib_SOURCE_DIR};${zlib_BINARY_DIR}" CACHE PATH "" FORCE)
+        set(ZLIB_LIBRARY zlibstatic CACHE STRING "" FORCE)
+        set(ZLIB_FOUND TRUE CACHE BOOL "" FORCE)
+        if(NOT TARGET ZLIB::ZLIB)
+            add_library(ZLIB::ZLIB ALIAS zlibstatic)
+        endif()
+    endif()
+
     set(ENABLE_TEST  OFF CACHE BOOL "" FORCE)
     set(ENABLE_TAR   OFF CACHE BOOL "" FORCE)
     set(ENABLE_CPIO  OFF CACHE BOOL "" FORCE)
     set(ENABLE_CAT   OFF CACHE BOOL "" FORCE)
+    set(ENABLE_ZLIB  ON  CACHE BOOL "" FORCE)
     set(HAVE_WCSCPY  1   CACHE INTERNAL "" FORCE)
     set(HAVE_WCSLEN  1   CACHE INTERNAL "" FORCE)
     set(CMAKE_POLICY_VERSION_MINIMUM 3.5)
@@ -107,6 +128,9 @@ target_link_libraries(HPR-Store PRIVATE
     nlohmann_json::nlohmann_json
     LibArchive::LibArchive
 )
+if(TARGET zlibstatic)
+    target_link_libraries(HPR-Store PRIVATE zlibstatic)
+endif()
 
 if(WIN32)
     target_compile_definitions(HPR-Store PRIVATE CURL_STATICLIB)
@@ -114,16 +138,23 @@ if(WIN32)
 else()
     target_link_libraries(HPR-Store PRIVATE libcurl_static)
 endif()
+add_dependencies(HPR-Store libcurl_static)
+if(TARGET archive_static)
+    add_dependencies(HPR-Store archive_static)
+endif()
+if(TARGET zlibstatic)
+    add_dependencies(HPR-Store zlibstatic)
+endif()
+
+set_target_properties(HPR-Store PROPERTIES
+    SLINT_EMBED_RESOURCES embed-files
+)
 
 if(EXISTS "${CMAKE_CURRENT_SOURCE_DIR}/src/ui/main.slint")
     slint_target_sources(HPR-Store src/ui/main.slint)
 elseif(EXISTS "${CMAKE_CURRENT_SOURCE_DIR}/ui/main.slint")
     slint_target_sources(HPR-Store ui/main.slint)
 endif()
-
-set_target_properties(HPR-Store PROPERTIES
-    SLINT_EMBED_RESOURCES embed-files
-)
 
 target_include_directories(lua_static PUBLIC external/lua/)
 target_include_directories(HPR-Store PUBLIC  external/lua/)

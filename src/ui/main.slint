@@ -138,6 +138,11 @@ component BackButton inherits Rectangle {
     }
 }
 
+component StarIcon inherits Image {
+    source: @image-url("star.svg");
+    image-fit: contain;
+}
+
 export component StoreWindow inherits Window {
     title: "HPR Store";
     no-frame: false;
@@ -564,21 +569,33 @@ export component StoreWindow inherits Window {
                             alignment: start;
 
                             Rectangle {
-                                width: sortStarsLabel.preferred-width + 18px * Palette.scale;
+                                width: sortStarsContent.preferred-width + 16px * Palette.scale;
                                 height: 22px * Palette.scale;
                                 border-radius: 5px * Palette.scale;
                                 border-width: 1px * Palette.scale;
-                                border-color: currentSort == 1 ? #facc1560 : Palette.input-border;
-                                background: currentSort == 1 ? #facc1518 : (sortStarsTA.has-hover ? Palette.input-bg-hover : Palette.input-bg);
+                                border-color: currentSort == 1 ? #fbbf2480 : Palette.input-border;
+                                background: currentSort == 1 ? #fbbf2422 : (sortStarsTA.has-hover ? Palette.input-bg-hover : Palette.input-bg);
                                 animate background { duration: 100ms; }
 
-                                sortStarsLabel := Text {
-                                    text: "⭐ Stars";
-                                    font-size: 9.5px * Palette.scale;
-                                    font-weight: 700;
-                                    color: currentSort == 1 ? #facc15 : Palette.text-secondary;
-                                    horizontal-alignment: center;
-                                    vertical-alignment: center;
+                                sortStarsContent := HorizontalLayout {
+                                    spacing: 5px * Palette.scale;
+                                    alignment: center;
+
+                                    VerticalLayout {
+                                        alignment: center;
+                                        StarIcon {
+                                            width: 12.5px * Palette.scale;
+                                            height: 12.5px * Palette.scale;
+                                        }
+                                    }
+
+                                    sortStarsLabel := Text {
+                                        text: "Stars";
+                                        font-size: 9.5px * Palette.scale;
+                                        font-weight: 700;
+                                        color: currentSort == 1 ? #fde047 : Palette.text-secondary;
+                                        vertical-alignment: center;
+                                    }
                                 }
                                 sortStarsTA := TouchArea {
                                     mouse-cursor: pointer;
@@ -899,11 +916,25 @@ export component StoreWindow inherits Window {
                                     HorizontalLayout {
                                         spacing: 16px * Palette.scale;
 
-                                        Text {
-                                            text: "★ " + item.star-count;
-                                            font-size: 10.5px * Palette.scale;
-                                            color: #facc15;
-                                            vertical-alignment: center;
+                                        HorizontalLayout {
+                                            spacing: 4px * Palette.scale;
+                                            alignment: start;
+
+                                            VerticalLayout {
+                                                alignment: center;
+                                                StarIcon {
+                                                    width: 12px * Palette.scale;
+                                                    height: 12px * Palette.scale;
+                                                }
+                                            }
+
+                                            Text {
+                                                text: item.star-count;
+                                                font-size: 10.5px * Palette.scale;
+                                                font-weight: 600;
+                                                color: #fbbf24;
+                                                vertical-alignment: center;
+                                            }
                                         }
 
                                         Text {
@@ -1127,11 +1158,25 @@ export component StoreWindow inherits Window {
                                         spacing: 24px * Palette.scale;
                                         alignment: space-around;
 
-                                        Text {
-                                            text: "★ Stars: " + selectedItem.star-count;
-                                            font-size: 11.5px * Palette.scale;
-                                            font-weight: 700;
-                                            color: #facc15;
+                                        HorizontalLayout {
+                                            spacing: 6px * Palette.scale;
+                                            alignment: center;
+
+                                            VerticalLayout {
+                                                alignment: center;
+                                                StarIcon {
+                                                    width: 15px * Palette.scale;
+                                                    height: 15px * Palette.scale;
+                                                }
+                                            }
+
+                                            Text {
+                                                text: "Stars: " + selectedItem.star-count;
+                                                font-size: 11.5px * Palette.scale;
+                                                font-weight: 700;
+                                                color: #fde047;
+                                                vertical-alignment: center;
+                                            }
                                         }
 
                                         Text {
