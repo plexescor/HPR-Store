@@ -1,6 +1,6 @@
 #include "uiEventBridge.hpp"
 #include "installer.hpp"
-#include <slint/slint.h>
+#include <slint.h>
 #include <iostream>
 #include <string>
 

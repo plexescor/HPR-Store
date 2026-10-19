@@ -68,7 +68,7 @@ Want your extension or theme listed in HPR-Store? See [PUBLISHING.md](./PUBLISHI
 ### Dependencies (Linux)
 - **Slint Compiler & Library**
 - **libarchive** (extracts `.zip` and `.tar` archives)
-- **ixwebsocket** (performs HTTP fetches and package downloads)
+-- **libcurl**
 - **nlohmann_json** (parses registry JSON files)
 - **openssl** / **zlib**
 
@@ -83,7 +83,7 @@ sudo pacman -S base-devel cmake libarchive openssl zlib
 ```bash
 # Build
 mkdir build && cd build
-cmake .. -DCMAKE_BUILD_TYPE=Release
+cmake -G Ninja .. -DCMAKE_BUILD_TYPE=Release
 cmake --build . --config Release
 ```
 
@@ -109,7 +109,7 @@ Exposes `initialize`, `destroy`, and `showUi` as `extern "C"` symbols. Holds the
 Owns the `StoreWindow` Slint instance and wires it to `UIEventBridge`, which maps all user interactions to C++ installer and registry logic.
 
 ### Registry & Installer (`src/registryManager.cpp`, `src/installer.cpp`)
-- Downloads remote `registry.json` from GitHub via `ixwebsocket`.
+- Downloads remote `registry.json` from GitHub via `libcurl`.
 - Downloads and extracts `.zip` release archives via `libarchive`.
 - Before any file modification, synchronously unloads the target extension via `HPR.unloadExtension` through the live Lua state.
 - For self-updates: uses `dladdr` (Linux) and `GetModuleFileNameW` (Windows) to resolve the exact loaded library path, then performs rename-staging before overwriting.

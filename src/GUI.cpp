@@ -1,7 +1,7 @@
 #include "GUI.hpp"
 #include "installer.hpp"
 #include "main.h"
-#include <slint/slint.h>
+#include <slint.h>
 
 GUI::GUI() 
     : ui(StoreWindow::create()),
