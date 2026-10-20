@@ -24,6 +24,7 @@ extern std::string getHprVersionFromLua();
 #include <fstream>
 #include <filesystem>
 #include "network.hpp"
+#include <main.h>
 
 static std::string sanitizeMarkdownForSlint(const std::string& input)
 {
@@ -116,7 +117,13 @@ static StoreItem_S toSlintStoreItem(const StoreItem& item, const std::unordered_
     s.author = slint::SharedString(item.author);
     s.author_github = slint::SharedString(item.authorGithub);
     s.description = slint::SharedString(item.description);
-    s.long_description = slint::private_api::parse_markdown(slint::SharedString(sanitizeMarkdownForSlint(item.longDescription)), {});
+    slint::StyledText dummy{};
+    slint::cbindgen_private::Slice<slint::StyledText> emptyArgs{&dummy, 0};
+    
+    s.long_description = slint::private_api::parse_markdown(
+        slint::SharedString(sanitizeMarkdownForSlint(item.longDescription)),
+        emptyArgs
+    );
     s.version = slint::SharedString(item.version);
     s.download_url = slint::SharedString(item.downloadUrl);
     s.source_url = slint::SharedString(item.sourceUrl);

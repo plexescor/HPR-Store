@@ -5,7 +5,7 @@ HPR.versionSupport = { "v0.9.13" }
 local initializer, err
 local destroy, err1
 local showUi, err2
-
+local isLibraryLoaded = false
 function loadSharedLibrary()
     local extDir = (HPR.getExtensionAbsoluteDir ~= nil) and HPR.getExtensionAbsoluteDir() or HPR.getExtensionDir()
 
@@ -59,8 +59,6 @@ end
 function init()
     HPR.log(HPR.extensionName, HPR.extensionName .. " Initialized")
     print("Initialized")
-
-    loadSharedLibrary()
 end
 
 function onTick()
@@ -74,6 +72,11 @@ function onExit()
 end
 
 function onAction()
+    if not isLibraryLoaded then
+        loadSharedLibrary()
+        isLibraryLoaded = true
+    end
+
     if showUi then
         showUi()
     end
